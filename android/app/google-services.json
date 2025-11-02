@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "651038666741",
+    "project_id": "speedmatharena",
+    "storage_bucket": "speedmatharena.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:651038666741:android:dc96ae96442ca18909babc",
+        "android_client_info": {
+          "package_name": "com.example.speedmath_arena"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAk365oKCONsJbz0QOj1rdHF2Swv4rrDcM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
