@@ -1,49 +1,60 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:speedmath_arena/screens/battle_screen.dart' as battle;
-import 'package:speedmath_arena/screens/login_screen.dart' as login;
-import 'package:speedmath_arena/screens/practice_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/progress_provider.dart';
+import 'level_select_screen.dart';
+import 'tricks_vault_screen.dart';
+import 'profile_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  void handleBattleTap(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const login.LoginScreen()),
-      );
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const battle.BattleScreen()),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final prog = Provider.of<ProgressProvider>(context);
     return Scaffold(
-      appBar: AppBar(title: const Text("SpeedMath Arena")),
-      body: Center(
+      appBar: AppBar(title: Text('Speed Maths')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PracticeScreen()),
-                );
-                // Offline Practice Mode - no login needed
-              },
-              child: const Text("Practice Mode 🧮"),
+            Card(
+              child: ListTile(
+                title: Text('Coins: ${prog.coins}'),
+                subtitle: Text('Highest Level: ${prog.highestLevel}'),
+                trailing: Icon(Icons.account_balance_wallet),
+              ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => handleBattleTap(context),
-              child: const Text("Leaderboard Battle 🏆"),
+            SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: Icon(Icons.play_arrow),
+              label: Text('Start / Continue'),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => LevelSelectionScreen())),
+            ),
+            SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: Icon(Icons.lightbulb),
+              label: Text('Tricks Vault'),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => TricksVaultScreen())),
+            ),
+            SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: Icon(Icons.person),
+              label: Text('Profile / Stats'),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => ProfileScreen())),
+            ),
+            Spacer(),
+            TextButton.icon(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => SettingsScreen())),
+              icon: Icon(Icons.settings),
+              label: Text('Settings'),
             ),
           ],
         ),
