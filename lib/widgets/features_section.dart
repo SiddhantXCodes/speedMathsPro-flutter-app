@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/feature_detail_screen.dart';
+import '../screens/quiz_screen.dart';
 
 class FeaturesSection extends StatelessWidget {
   final bool isDarkMode;
@@ -286,8 +287,11 @@ class FeaturesSection extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => FeatureDetailScreen(
-                            title: "$topic ($min-$max, $count questions)",
+                          builder: (_) => QuizScreen(
+                            title: 'Addition',
+                            min: 5,
+                            max: 300,
+                            count: 10,
                           ),
                         ),
                       );
