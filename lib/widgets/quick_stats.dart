@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../providers/performance_provider.dart';
+import '../theme/app_theme.dart';
 
 class QuickStatsSection extends StatelessWidget {
   final bool isDarkMode;
@@ -7,8 +10,12 @@ class QuickStatsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final cardColor = isDarkMode ? Colors.grey[900]! : Colors.white;
+    final textColor = AppTheme.adaptiveText(context);
+    final cardColor = AppTheme.adaptiveCard(context);
+    final accent = AppTheme.adaptiveAccent(context);
+
+    final performance = Provider.of<PerformanceProvider>(context);
+    final scores = performance.getLast7DaysScores();
 
     return Container(
       width: double.infinity,
@@ -17,17 +24,13 @@ class QuickStatsSection extends StatelessWidget {
         color: cardColor,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // -------------------- Header --------------------
+          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -39,32 +42,31 @@ class QuickStatsSection extends StatelessWidget {
                   color: textColor,
                 ),
               ),
-              Icon(Icons.bar_chart, color: Colors.orangeAccent),
+              Icon(Icons.bar_chart, color: accent),
             ],
           ),
           const SizedBox(height: 14),
 
-          // -------------------- Stats Row --------------------
+          // Stats row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _statItem("Global Rank", "#23,142"),
-              _statItem("Today Time", "34 min"),
-              _statItem("Accuracy", "92%"),
+              _statItem("Global Rank", "#23,142", textColor),
+              _statItem("Weekly Avg", "${_average(scores)} pts", textColor),
+              _statItem("Best", "${_max(scores)} pts", textColor),
             ],
           ),
-
           const SizedBox(height: 16),
 
-          // -------------------- Graph --------------------
+          // Weekly performance chart
           SizedBox(
-            height: 140,
+            height: 130,
             child: LineChart(
               LineChartData(
                 minX: 0,
                 maxX: 6,
-                minY: 1000,
-                maxY: 1600,
+                minY: 0,
+                maxY: (scores.isEmpty ? 100 : _max(scores) + 10).toDouble(),
                 gridData: FlGridData(show: false),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
@@ -80,9 +82,8 @@ class QuickStatsSection extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 22,
-                      interval: 1,
-                      getTitlesWidget: (value, meta) {
+                      reservedSize: 20,
+                      getTitlesWidget: (value, _) {
                         const days = [
                           'Mon',
                           'Tue',
@@ -93,8 +94,11 @@ class QuickStatsSection extends StatelessWidget {
                           'Sun',
                         ];
                         return Text(
-                          days[value.toInt()],
-                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                          days[value.toInt() % 7],
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.6),
+                            fontSize: 10,
+                          ),
                         );
                       },
                     ),
@@ -102,22 +106,17 @@ class QuickStatsSection extends StatelessWidget {
                 ),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 1400),
-                      FlSpot(1, 1380),
-                      FlSpot(2, 1410),
-                      FlSpot(3, 1360),
-                      FlSpot(4, 1390),
-                      FlSpot(5, 1450),
-                      FlSpot(6, 1480),
-                    ],
+                    spots: List.generate(
+                      scores.length,
+                      (i) => FlSpot(i.toDouble(), scores[i].toDouble()),
+                    ),
                     isCurved: true,
-                    color: Colors.orangeAccent,
+                    color: accent,
                     barWidth: 2.5,
-                    dotData: FlDotData(show: false),
+                    dotData: FlDotData(show: true),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: Colors.orangeAccent.withOpacity(0.2),
+                      color: accent.withOpacity(0.2),
                     ),
                   ),
                 ],
@@ -129,25 +128,29 @@ class QuickStatsSection extends StatelessWidget {
     );
   }
 
-  Widget _statItem(String title, String value) {
+  static int _average(List<int> scores) => scores.isEmpty
+      ? 0
+      : (scores.reduce((a, b) => a + b) / scores.length).round();
+
+  static int _max(List<int> scores) =>
+      scores.isEmpty ? 0 : scores.reduce((a, b) => a > b ? a : b);
+
+  Widget _statItem(String title, String value, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Color.fromARGB(255, 5, 127, 157),
+            color: color,
             fontSize: 14,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           title,
-          style: const TextStyle(
-            color: Color.fromARGB(255, 111, 110, 110),
-            fontSize: 12,
-          ),
+          style: TextStyle(color: color.withOpacity(0.7), fontSize: 12),
         ),
       ],
     );

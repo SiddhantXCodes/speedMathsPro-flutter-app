@@ -1,29 +1,26 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'package:provider/provider.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/quick_stats.dart';
 import '../widgets/heatmap_section.dart';
 import '../widgets/features_section.dart';
+import '../providers/performance_provider.dart';
+import '../providers/practice_log_provider.dart';
+import '../theme/app_theme.dart';
+import '../app.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool isDarkMode = false;
   int userStreak = 10;
   bool didToday = false;
-
-  final Map<DateTime, int> _activity = {
-    for (int i = 0; i < 365; i++)
-      DateTime(DateTime.now().year, 1, 1).add(Duration(days: i)): (i % 11 == 0)
-          ? 4
-          : (i % 7 == 0)
-          ? 2
-          : (i % 5 == 0 ? 1 : 0),
-  };
 
   final double cellSize = 12;
   final double cellSpacing = 4;
@@ -43,76 +40,65 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  List<List<DateTime?>> _generateYearWeeks(int year) {
-    final first = DateTime(year, 1, 1);
-    final last = DateTime(year, 12, 31);
-    int pad = first.weekday - 1;
-    List<DateTime?> currentWeek = List<DateTime?>.filled(7, null);
-    List<List<DateTime?>> weeks = [];
+  void _toggleToday() async {
+    final todayKey = DateTime.now();
 
-    int dayIndex = 0;
-    DateTime day = first;
-    for (int i = pad; i < 7; i++) {
-      currentWeek[i] = day;
-      day = day.add(const Duration(days: 1));
-    }
-    weeks.add(List<DateTime?>.from(currentWeek));
-
-    while (!day.isAfter(last)) {
-      currentWeek = List<DateTime?>.filled(7, null);
-      for (int i = 0; i < 7 && !day.isAfter(last); i++) {
-        currentWeek[i] = day;
-        day = day.add(const Duration(days: 1));
-      }
-      weeks.add(List<DateTime?>.from(currentWeek));
-    }
-    return weeks;
-  }
-
-  Map<int, int> _monthFirstWeekIndex(List<List<DateTime?>> weeks) {
-    final map = <int, int>{};
-    for (int w = 0; w < weeks.length; w++) {
-      for (final d in weeks[w]) {
-        if (d == null) continue;
-        final m = d.month;
-        if (!map.containsKey(m)) map[m] = w;
-      }
-    }
-    return map;
-  }
-
-  void _toggleToday() {
-    final todayKey = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
     setState(() {
       didToday = !didToday;
-      if (didToday) {
-        userStreak += 1;
-        _activity[todayKey] = ((_activity[todayKey] ?? 0) + 2).clamp(0, 4);
-      } else {
-        userStreak = max(0, userStreak - 1);
-        _activity[todayKey] = ((_activity[todayKey] ?? 0) - 2).clamp(0, 4);
-      }
+      userStreak = didToday ? userStreak + 1 : max(0, userStreak - 1);
     });
+
+    try {
+      final logProvider = Provider.of<PracticeLogProvider>(
+        context,
+        listen: false,
+      );
+
+      if (didToday) {
+        await logProvider.addSession(
+          topic: "Manual Practice",
+          score: 1,
+          total: 1,
+          timeSpentSeconds: 60,
+        );
+      } else {
+        await logProvider.removeSession(todayKey);
+      }
+    } catch (e) {
+      debugPrint("⚠️ Failed to update today's streak: $e");
+    }
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
-    final year = DateTime.now().year;
-    final weeks = _generateYearWeeks(year);
-    final monthPositions = _monthFirstWeekIndex(weeks);
+    final theme = Theme.of(context);
+    final textColor = AppTheme.adaptiveText(context);
+    final bgColor = theme.scaffoldBackgroundColor;
+
+    final practiceLog = Provider.of<PracticeLogProvider>(context);
+    final activity = practiceLog.getActivityMap();
 
     return Scaffold(
-      backgroundColor: isDarkMode ? Colors.black : Colors.grey[50],
+      backgroundColor: bgColor,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(56),
         child: TopBar(
-          isDarkMode: isDarkMode,
-          userStreak: userStreak,
-          onToggleTheme: () => setState(() => isDarkMode = !isDarkMode),
+          userStreak: userStreak, // or pass your streak variable here
           onToggleToday: _toggleToday,
         ),
       ),
@@ -123,20 +109,19 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 12),
-              QuickStatsSection(isDarkMode: false),
+              QuickStatsSection(
+                isDarkMode: theme.brightness == Brightness.dark,
+              ),
               const SizedBox(height: 20),
               HeatmapSection(
-                isDarkMode: isDarkMode,
-                year: year,
-                weeks: weeks,
-                monthPositions: monthPositions,
+                isDarkMode: theme.brightness == Brightness.dark,
+                activity: activity,
                 cellSize: cellSize,
                 cellSpacing: cellSpacing,
-                activity: _activity,
                 colorForValue: _colorForValue,
               ),
               const SizedBox(height: 24),
-              FeaturesSection(isDarkMode: isDarkMode),
+              FeaturesSection(isDarkMode: theme.brightness == Brightness.dark),
             ],
           ),
         ),

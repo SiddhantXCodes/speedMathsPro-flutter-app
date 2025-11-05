@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../screens/feature_detail_screen.dart';
-import '../screens/quiz_screen.dart';
+import '../screens/number_of_questions_selector_popup.dart';
+import '../screens/quiz/quiz_screen.dart';
+import '../screens/daily_ranked_quiz_screen.dart';
+import '../screens/leaderboard_screen.dart';
 
 class FeaturesSection extends StatelessWidget {
   final bool isDarkMode;
@@ -115,8 +117,8 @@ class FeaturesSection extends StatelessWidget {
   // ✅ Bottom sheet for number range & question count
   // -----------------------------------------------
   void _showPracticeDialog(BuildContext context, String topic) {
-    final TextEditingController minCtrl = TextEditingController(text: '0');
-    final TextEditingController maxCtrl = TextEditingController(text: '100');
+    final TextEditingController minCtrl = TextEditingController(text: '5');
+    final TextEditingController maxCtrl = TextEditingController(text: '30');
     double questionCount = 10;
 
     showModalBottomSheet(
@@ -288,10 +290,10 @@ class FeaturesSection extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => QuizScreen(
-                            title: 'Addition',
-                            min: 5,
-                            max: 300,
-                            count: 10,
+                            title: topic,
+                            min: min,
+                            max: max,
+                            count: count,
                           ),
                         ),
                       );
@@ -394,6 +396,23 @@ class FeaturesSection extends StatelessWidget {
   ) {
     return InkWell(
       onTap: () {
+        // ✅ Launch Daily Ranked Quiz directly
+        if (title == 'Daily Ranked Quiz') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DailyRankedQuizScreen()),
+          );
+          return;
+        }
+        // ✅ Launch Leaderboard for Performance card
+        if (title == 'Performance') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+          );
+          return;
+        }
+        // Otherwise, keep existing logic
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => FeatureDetailScreen(title: title)),

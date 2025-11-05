@@ -1,44 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../theme/app_theme.dart';
 
 class HeatmapSection extends StatelessWidget {
   final bool isDarkMode;
-  final int year;
-  final List<List<DateTime?>> weeks;
-  final Map<int, int> monthPositions;
+  final Map<DateTime, int> activity;
   final double cellSize;
   final double cellSpacing;
-  final Map<DateTime, int> activity;
   final Color Function(int) colorForValue;
 
   const HeatmapSection({
     super.key,
     required this.isDarkMode,
-    required this.year,
-    required this.weeks,
-    required this.monthPositions,
+    required this.activity,
     required this.cellSize,
     required this.cellSpacing,
-    required this.activity,
     required this.colorForValue,
   });
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final weekCount = weeks.length;
+    final textColor = AppTheme.adaptiveText(context);
+    final bgColor = AppTheme.adaptiveCard(context);
+    final now = DateTime.now();
+    final year = now.year;
+
+    final startDate = DateTime(year, 1, 1);
+    final endDate = DateTime(year, 12, 31);
+    final allDays = _generateDays(startDate, endDate);
+    final weeks = _splitIntoWeeks(allDays);
+    final monthPositions = _getMonthPositions(weeks);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[900] : Colors.white,
+        color: bgColor,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
         ],
       ),
       child: Column(
@@ -49,29 +49,23 @@ class HeatmapSection extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Your Practice Activity',
+                "Your Practice Activity",
                 style: TextStyle(
-                  fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  fontSize: 16,
                   color: textColor,
                 ),
               ),
-              DropdownButton<int>(
-                value: year,
-                underline: const SizedBox(),
-                items: [year, year - 1, year - 2]
-                    .map(
-                      (y) => DropdownMenuItem(
-                        value: y,
-                        child: Text('$y', style: TextStyle(color: textColor)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {},
+              Text(
+                "$year",
+                style: TextStyle(
+                  color: textColor.withOpacity(0.7),
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // Heatmap grid
           SingleChildScrollView(
@@ -80,11 +74,13 @@ class HeatmapSection extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (int w = 0; w < weekCount; w++) ...[
+                for (int w = 0; w < weeks.length; w++) ...[
+                  if (monthPositions.containsValue(w))
+                    SizedBox(width: cellSpacing * 3),
                   Column(
                     children: [
                       for (int d = 0; d < 7; d++) ...[
-                        _buildCell(weeks[w][d]),
+                        _buildCell(context, weeks[w][d]),
                         SizedBox(height: cellSpacing),
                       ],
                     ],
@@ -101,22 +97,21 @@ class HeatmapSection extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (int w = 0; w < weekCount; w++) ...[
+                for (int w = 0; w < weeks.length; w++) ...[
                   SizedBox(
-                    width: cellSize,
+                    width: cellSize + cellSpacing,
                     child: Center(
                       child: monthPositions.containsValue(w)
                           ? Text(
                               _monthForWeek(monthPositions, w),
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.grey[600],
+                                color: textColor.withOpacity(0.6),
                               ),
                             )
                           : const SizedBox.shrink(),
                     ),
                   ),
-                  SizedBox(width: cellSpacing),
                 ],
               ],
             ),
@@ -126,7 +121,7 @@ class HeatmapSection extends StatelessWidget {
           // Legend
           Row(
             children: [
-              const Text('Less', style: TextStyle(fontSize: 12)),
+              Text('Less', style: TextStyle(fontSize: 12, color: textColor)),
               const SizedBox(width: 8),
               ...List.generate(4, (i) {
                 final val = i + 1;
@@ -143,7 +138,7 @@ class HeatmapSection extends StatelessWidget {
                 );
               }),
               const SizedBox(width: 8),
-              const Text('More', style: TextStyle(fontSize: 12)),
+              Text('More', style: TextStyle(fontSize: 12, color: textColor)),
             ],
           ),
         ],
@@ -151,44 +146,120 @@ class HeatmapSection extends StatelessWidget {
     );
   }
 
-  Widget _buildCell(DateTime? date) {
+  Widget _buildCell(BuildContext context, DateTime? date) {
     if (date == null) {
       return Container(width: cellSize, height: cellSize);
     }
-    final key = DateTime(date.year, date.month, date.day);
-    final int val = activity[key] ?? 0;
-    final color = colorForValue(val);
-    return Container(
-      width: cellSize,
-      height: cellSize,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(3),
+
+    final normalized = DateTime(date.year, date.month, date.day);
+    final value = activity[normalized] ?? 0;
+    final color = colorForValue(value);
+
+    return GestureDetector(
+      onTap: value > 0
+          ? () {
+              final formatted = DateFormat('MMM d, yyyy').format(date);
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  backgroundColor: AppTheme.adaptiveCard(context),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  title: Text(
+                    'Activity on $formatted',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.adaptiveText(context),
+                    ),
+                  ),
+                  content: Text(
+                    '$value practice sessions completed',
+                    style: TextStyle(
+                      color: AppTheme.adaptiveText(context).withOpacity(0.8),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("OK"),
+                    ),
+                  ],
+                ),
+              );
+            }
+          : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: cellSize,
+        height: cellSize,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+        ),
       ),
     );
   }
 
-  String _monthForWeek(Map<int, int> monthPositions, int weekIndex) {
-    final entry = monthPositions.entries.firstWhere(
+  List<DateTime> _generateDays(DateTime start, DateTime end) {
+    final days = <DateTime>[];
+    for (var d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
+      days.add(d);
+    }
+    return days;
+  }
+
+  List<List<DateTime?>> _splitIntoWeeks(List<DateTime> allDays) {
+    final List<List<DateTime?>> weeks = [];
+    List<DateTime?> current = List.filled(7, null);
+    int offset = allDays.first.weekday - 1;
+    int index = 0;
+    for (int i = offset; i < 7 && index < allDays.length; i++) {
+      current[i] = allDays[index++];
+    }
+    weeks.add(List.from(current));
+    while (index < allDays.length) {
+      current = List.filled(7, null);
+      for (int i = 0; i < 7 && index < allDays.length; i++) {
+        current[i] = allDays[index++];
+      }
+      weeks.add(List.from(current));
+    }
+    return weeks;
+  }
+
+  Map<int, int> _getMonthPositions(List<List<DateTime?>> weeks) {
+    final map = <int, int>{};
+    for (int w = 0; w < weeks.length; w++) {
+      for (final d in weeks[w]) {
+        if (d == null) continue;
+        if (!map.containsKey(d.month)) map[d.month] = w;
+      }
+    }
+    return map;
+  }
+
+  String _monthForWeek(Map<int, int> positions, int weekIndex) {
+    final entry = positions.entries.firstWhere(
       (e) => e.value == weekIndex,
       orElse: () => const MapEntry(0, -1),
     );
     if (entry.key == 0) return '';
-    const names = [
-      "",
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
-    return names[entry.key];
+    return months[entry.key];
   }
 }
