@@ -1,6 +1,7 @@
-import 'dart:math';
+// lib/screens/leaderboard_screen.dart
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -11,168 +12,310 @@ class LeaderboardScreen extends StatefulWidget {
 }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  List<Map<String, dynamic>> dailyLeaderboard = [];
-  List<Map<String, dynamic>> allTimeLeaderboard = [];
   String selectedTab = "daily";
-  int? myScore;
-  String? todayKey;
+  final user = FirebaseAuth.instance.currentUser;
+
+  String get todayKey {
+    final now = DateTime.now();
+    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  }
+
+  int? myRank;
+  Map<String, dynamic>? myData;
 
   @override
   void initState() {
     super.initState();
-    _loadLeaderboards();
+    _fetchMyRank();
   }
 
-  Future<void> _loadLeaderboards() async {
-    final prefs = await SharedPreferences.getInstance();
-    todayKey = DateTime.now().toIso8601String().substring(0, 10);
-    myScore = prefs.getInt('daily_score_$todayKey') ?? 0;
+  Future<void> _fetchMyRank() async {
+    if (user == null) return;
 
-    final random = Random();
+    try {
+      debugPrint("📡 Fetching from /daily_leaderboard/$todayKey/entries");
 
-    dailyLeaderboard = List.generate(10, (i) {
-      return {'name': 'User_${1000 + i}', 'score': random.nextInt(100) + 20};
-    });
-    dailyLeaderboard.add({'name': 'You', 'score': myScore ?? 34});
+      final ref = FirebaseFirestore.instance
+          .collection('daily_leaderboard')
+          .doc(todayKey)
+          .collection('entries')
+          .orderBy('score', descending: true)
+          .orderBy('timeTaken');
 
-    allTimeLeaderboard = List.generate(10, (i) {
-      return {'name': 'User_${1000 + i}', 'score': 500 + random.nextInt(500)};
-    });
-    allTimeLeaderboard.add({'name': 'You', 'score': 650});
+      final snap = await ref.get();
+      debugPrint("✅ Found ${snap.docs.length} daily entries");
 
-    dailyLeaderboard.sort((a, b) => b['score'].compareTo(a['score']));
-    allTimeLeaderboard.sort((a, b) => b['score'].compareTo(a['score']));
+      int rank = 1;
+      for (final doc in snap.docs) {
+        debugPrint(
+          "👤 ${doc.id} → ${(doc.data() as Map)['name']} (${(doc.data() as Map)['score']})",
+        );
+        if (doc.id == user!.uid) {
+          setState(() {
+            myRank = rank;
+            myData = doc.data();
+          });
+          return;
+        }
+        rank++;
+      }
 
-    setState(() {});
+      setState(() {
+        myRank = null;
+        myData = null;
+      });
+    } catch (e) {
+      debugPrint("⚠️ Failed to fetch rank: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final textColor = AppTheme.adaptiveText(context);
-    final surface = theme.scaffoldBackgroundColor;
-    final cardColor = theme.cardColor;
-
-    final currentList = selectedTab == "daily"
-        ? dailyLeaderboard
-        : allTimeLeaderboard;
-
-    // find your rank and entry safely
-    final myIndex = currentList.indexWhere((e) => e['name'] == 'You');
-    final myRank = myIndex == -1 ? null : myIndex + 1;
-    final myEntry = myIndex == -1
-        ? <String, dynamic>{'score': 0, 'name': 'You'}
-        : currentList[myIndex];
+    final accent = AppTheme.adaptiveAccent(context);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: surface,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text("Leaderboard", style: TextStyle(color: textColor)),
+        backgroundColor: accent,
         centerTitle: true,
-        backgroundColor:
-            theme.appBarTheme.backgroundColor ?? Colors.transparent,
-        elevation: 0,
-        iconTheme: theme.iconTheme,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: "Refresh",
+            onPressed: () {
+              _fetchMyRank();
+              setState(() {});
+            },
+          ),
+        ],
       ),
-      body: currentList.isEmpty
-          ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation(colorScheme.primary),
-              ),
-            )
-          : Column(
-              children: [
-                const SizedBox(height: 8),
-                _buildTabs(context, textColor),
-                const SizedBox(height: 16),
-                _buildTopThree(context, currentList),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 90, top: 12),
-                    itemCount: currentList.length > 3
-                        ? currentList.length - 3
-                        : 0,
-                    itemBuilder: (context, index) {
-                      final entry = currentList[index + 3];
-                      final isYou = entry['name'] == 'You';
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isYou
-                              ? colorScheme.primary.withOpacity(0.12)
-                              : colorScheme.surfaceVariant.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: isYou
-                                  ? colorScheme.primary
-                                  : colorScheme.primaryContainer,
-                              child: Text(
-                                "${index + 4}",
-                                style: TextStyle(
-                                  color: isYou
-                                      ? colorScheme.onPrimary
-                                      : colorScheme.onPrimaryContainer,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                entry['name'] ?? 'User',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: textColor,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              "${entry['score'] ?? 0} pts",
-                              style: TextStyle(
-                                color: textColor.withOpacity(0.8),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                _buildYouCard(context, myRank, myEntry),
-              ],
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+          _buildTabs(context, textColor, accent),
+          const SizedBox(height: 12),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: selectedTab == "daily"
+                  ? FirebaseFirestore.instance
+                        .collection('daily_leaderboard')
+                        .doc(todayKey)
+                        .collection('entries')
+                        .orderBy('score', descending: true)
+                        .orderBy('timeTaken')
+                        .limit(50)
+                        .snapshots()
+                  : FirebaseFirestore.instance
+                        .collection('alltime_leaderboard')
+                        .orderBy('totalScore', descending: true)
+                        .limit(50)
+                        .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      selectedTab == "daily"
+                          ? "No one has played today yet!"
+                          : "No leaderboard data yet.",
+                      style: TextStyle(
+                        color: textColor.withOpacity(0.8),
+                        fontSize: 15,
+                      ),
+                    ),
+                  );
+                }
+
+                final docs = snapshot.data!.docs;
+                final list = docs.map((e) {
+                  final data = e.data() as Map<String, dynamic>;
+                  return {
+                    'id': e.id,
+                    'name': data['name'] ?? 'Player',
+                    'photoUrl': data['photoUrl'] ?? '',
+                    'score': selectedTab == "daily"
+                        ? (data['score'] ?? 0)
+                        : (data['totalScore'] ?? 0),
+                    'timeTaken': data['timeTaken'] ?? 0,
+                    'correct': data['correct'] ?? 0,
+                  };
+                }).toList();
+
+                return _buildLeaderboardList(context, list, textColor, accent);
+              },
             ),
+          ),
+          if (user != null &&
+              myData != null &&
+              selectedTab == "daily" &&
+              myRank != null)
+            _buildYouCard(context, myRank!, myData!, accent, textColor),
+        ],
+      ),
     );
   }
 
-  // --- Top 3 Section ---
-  Widget _buildTopThree(BuildContext context, List<Map<String, dynamic>> list) {
-    final textColor = AppTheme.adaptiveText(context);
+  // 🏅 Tabs (Daily / All Time)
+  Widget _buildTabs(BuildContext context, Color textColor, Color accent) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      padding: const EdgeInsets.all(4),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _tabButton("daily", "Daily", textColor, accent),
+          _tabButton("all", "All Time", textColor, accent),
+        ],
+      ),
+    );
+  }
 
-    if (list.length < 3) return const SizedBox.shrink();
+  Widget _tabButton(String id, String label, Color textColor, Color accent) {
+    final isActive = selectedTab == id;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            selectedTab = id;
+          });
+          _fetchMyRank();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isActive ? Colors.white : textColor.withOpacity(0.7),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🏆 Leaderboard List
+  Widget _buildLeaderboardList(
+    BuildContext context,
+    List<Map<String, dynamic>> list,
+    Color textColor,
+    Color accent,
+  ) {
     final top3 = list.take(3).toList();
+    final others = list.length > 3 ? list.sublist(3) : [];
 
+    return Column(
+      children: [
+        if (top3.isNotEmpty) _buildTopThree(context, top3),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 90, top: 12),
+            itemCount: others.length,
+            itemBuilder: (context, index) {
+              final entry = others[index];
+              final isYou = user != null && entry['id'] == user!.uid;
+              final rank = index + 4;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isYou
+                      ? accent.withOpacity(0.12)
+                      : Theme.of(context).cardColor.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: isYou ? accent : accent.withOpacity(0.2),
+                      child: Text(
+                        "$rank",
+                        style: TextStyle(
+                          color: isYou ? Colors.white : textColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundImage:
+                          (entry['photoUrl']?.toString().isNotEmpty ?? false)
+                          ? NetworkImage(entry['photoUrl'])
+                          : null,
+                      backgroundColor: accent.withOpacity(0.15),
+                      child:
+                          (entry['photoUrl'] == null ||
+                              entry['photoUrl'].toString().isEmpty)
+                          ? Text(
+                              (entry['name'] ?? 'U')[0].toUpperCase(),
+                              style: TextStyle(
+                                color: accent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        entry['name'],
+                        style: TextStyle(
+                          fontWeight: isYou ? FontWeight.bold : FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "${entry['score']} pts",
+                      style: TextStyle(
+                        color: textColor.withOpacity(0.85),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 🥇 Top 3 Players Layout (ADDED)
+  Widget _buildTopThree(BuildContext context, List<Map<String, dynamic>> list) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          _buildAvatar(context, top3[1], 2, size: 65),
-          _buildAvatar(context, top3[0], 1, size: 80, crown: true),
-          _buildAvatar(context, top3[2], 3, size: 65),
+          if (list.length > 1) _buildAvatar(context, list[1], 2, size: 65),
+          _buildAvatar(context, list[0], 1, size: 80, crown: true),
+          if (list.length > 2) _buildAvatar(context, list[2], 3, size: 65),
         ],
       ),
     );
@@ -180,26 +323,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _buildAvatar(
     BuildContext context,
-    Map<String, dynamic> user,
+    Map<String, dynamic> data,
     int rank, {
     required double size,
     bool crown = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final textColor = AppTheme.adaptiveText(context);
-
-    // choose whether the badge color is the rank color (1/2/3) or primary
-    final badgeColor = rank == 1
+    final color = rank == 1
         ? AppTheme.gold
         : rank == 2
         ? AppTheme.silver
         : rank == 3
         ? AppTheme.bronze
-        : colorScheme.primary;
-
-    final displayName = (user['name'] == 'You')
-        ? 'You'
-        : (user['name'] ?? '').toString().replaceFirst('User_', '');
+        : AppTheme.adaptiveAccent(context);
 
     return Column(
       children: [
@@ -207,34 +343,35 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            // Crown for #1
             if (crown)
               Positioned(
                 top: -20,
                 child: Icon(
                   Icons.workspace_premium_rounded,
-                  color: badgeColor,
+                  color: color,
                   size: 30,
                 ),
               ),
-
-            // Avatar Circle
             CircleAvatar(
               radius: size / 2,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.surfaceVariant.withOpacity(0.12),
-              child: Text(
-                displayName.isEmpty ? '?' : displayName,
-                style: TextStyle(
-                  color: textColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
+              backgroundImage:
+                  (data['photoUrl']?.toString().isNotEmpty ?? false)
+                  ? NetworkImage(data['photoUrl'])
+                  : null,
+              backgroundColor: color.withOpacity(0.15),
+              child:
+                  (data['photoUrl'] == null ||
+                      data['photoUrl'].toString().isEmpty)
+                  ? Text(
+                      (data['name'] ?? 'P')[0].toUpperCase(),
+                      style: TextStyle(
+                        color: textColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    )
+                  : null,
             ),
-
-            // Rank badge (bottom)
             Positioned(
               bottom: -10,
               child: Container(
@@ -243,13 +380,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   vertical: 2.5,
                 ),
                 decoration: BoxDecoration(
-                  color: badgeColor,
+                  color: color,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   "#$rank",
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                  style: const TextStyle(
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -260,7 +397,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         ),
         const SizedBox(height: 20),
         Text(
-          "${user['score'] ?? 0} pts",
+          "${data['score']} pts",
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: AppTheme.adaptiveText(context).withOpacity(0.9),
@@ -270,85 +407,27 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // --- Tabs (Daily / All-Time) ---
-  Widget _buildTabs(BuildContext context, Color textColor) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      padding: const EdgeInsets.all(4),
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _tabButton(context, "daily", "Daily", textColor),
-          _tabButton(context, "all", "All Time", textColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _tabButton(
-    BuildContext context,
-    String id,
-    String label,
-    Color textColor,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isActive = selectedTab == id;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => selectedTab = id),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isActive ? colorScheme.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isActive
-                    ? colorScheme.onPrimary
-                    : textColor.withOpacity(0.7),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- Sticky "You" card ---
+  // 👤 Your rank card
   Widget _buildYouCard(
     BuildContext context,
-    int? myRank,
-    Map<String, dynamic> myEntry,
+    int rank,
+    Map data,
+    Color accent,
+    Color textColor,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textColor = AppTheme.adaptiveText(context);
-
-    final yourScore = myEntry['score'] ?? 0;
-    final rankText = myRank == null ? '-' : myRank.toString();
+    final score = data['score'] ?? 0;
+    final correct = data['correct'] ?? 0;
+    final time = data['timeTaken'] ?? 0;
+    final m = (time ~/ 60).toString().padLeft(2, '0');
+    final s = (time % 60).toString().padLeft(2, '0');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.primary.withOpacity(0.12),
+        color: accent.withOpacity(0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.primary.withOpacity(0.22),
-          width: 1,
-        ),
+        border: Border.all(color: accent.withOpacity(0.22), width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -356,40 +435,37 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: colorScheme.primary,
-                child: Text(
-                  rankText,
-                  style: TextStyle(
-                    color: colorScheme.onPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                backgroundColor: accent,
+                backgroundImage: (user?.photoURL != null)
+                    ? NetworkImage(user!.photoURL!)
+                    : null,
+                child: (user?.photoURL == null)
+                    ? Text(
+                        (user?.displayName ?? 'U')[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     "You",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   Text(
-                    "Score: $yourScore",
-                    style: TextStyle(color: textColor.withOpacity(0.7)),
+                    "Rank: #$rank | $score pts | $correct correct | ⏱ $m:$s",
+                    style: TextStyle(color: textColor.withOpacity(0.75)),
                   ),
                 ],
               ),
             ],
           ),
-          Icon(
-            Icons.emoji_events_rounded,
-            color: colorScheme.primary,
-            size: 28,
-          ),
+          Icon(Icons.emoji_events_rounded, color: accent, size: 28),
         ],
       ),
     );
