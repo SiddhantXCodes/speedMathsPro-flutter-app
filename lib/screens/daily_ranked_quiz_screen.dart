@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/question_generator.dart';
 import 'package:provider/provider.dart';
+import '../utils/question_generator.dart';
 import '../providers/performance_provider.dart';
 import '../providers/practice_log_provider.dart';
+import '../theme/app_theme.dart';
+import '../screens/login_screen.dart';
 
 class DailyRankedQuizScreen extends StatefulWidget {
   const DailyRankedQuizScreen({super.key});
@@ -24,19 +27,26 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
   late Timer _timer;
   int remainingSeconds = 420; // 7 minutes
   bool quizEnded = false;
+  bool _loading = true;
 
   final Map<int, String> userAnswers = {};
 
   @override
   void initState() {
     super.initState();
-    _generateQuestions();
-    _startTimer();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _generateQuestions();
+      _startTimer();
+    }
+    _loading = false;
   }
 
   @override
   void dispose() {
-    _timer.cancel();
+    if (!_loading && !quizEnded) {
+      _timer.cancel();
+    }
     super.dispose();
   }
 
@@ -58,7 +68,6 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
       'Mixed Questions',
     ];
 
-    // Balanced random pick across topics
     final rnd = Random();
     questions = [];
     for (int i = 0; i < 20; i++) {
@@ -139,14 +148,12 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
     await prefs.setInt('daily_correct_$todayKey', correct);
     await prefs.setInt('daily_incorrect_$todayKey', incorrect);
 
-    // ✅ Update performance provider (your leaderboard logic)
     final performance = Provider.of<PerformanceProvider>(
       context,
       listen: false,
     );
     await performance.addTodayScore(score);
 
-    // ✅ NEW: Log to PracticeLogProvider (for heatmap + summary)
     try {
       final logProvider = Provider.of<PracticeLogProvider>(
         context,
@@ -154,15 +161,14 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
       );
       await logProvider.addSession(
         topic: 'Daily Ranked Quiz',
-        score: correct, // correct answers
-        total: questions.length, // total questions
-        timeSpentSeconds: 420 - remainingSeconds, // since you use a 7-min timer
+        score: correct,
+        total: questions.length,
+        timeSpentSeconds: 420 - remainingSeconds,
       );
     } catch (e) {
       debugPrint('⚠️ Failed to log daily ranked session: $e');
     }
 
-    // ✅ Navigate to result screen
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -189,6 +195,90 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final theme = Theme.of(context);
+    final accent = AppTheme.adaptiveAccent(context);
+    final textColor = AppTheme.adaptiveText(context);
+    final cardColor = AppTheme.adaptiveCard(context);
+
+    // 🔒 If not logged in → redirect prompt
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("Daily Ranked Quiz"),
+          backgroundColor: theme.appBarTheme.backgroundColor,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.shadowColor.withOpacity(0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 58, color: accent),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Sign in to compete in Daily Ranked Quizzes\nand earn your global rank!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: textColor.withOpacity(0.85),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.login_rounded, color: Colors.white),
+                    label: const Text(
+                      "Login to Continue",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 🧮 Logged-in: show quiz
+    if (_loading || questions.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final q = questions[currentIndex];
     final time = _formatTime(remainingSeconds);
 
@@ -196,9 +286,9 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
       appBar: AppBar(
         title: const Text("Daily Ranked Quiz"),
         centerTitle: true,
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: accent,
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -206,36 +296,38 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Column(
                   children: [
-                    // Score + Timer
+                    // Score & Timer
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           "Score: $score",
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: textColor,
                           ),
                         ),
                         Text(
                           "⏱ $time",
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: accent,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
 
-                    // Question area
+                    // Question
                     Expanded(
                       child: Center(
                         child: RichText(
                           textAlign: TextAlign.center,
                           text: TextSpan(
-                            style: const TextStyle(
-                              color: Colors.black,
+                            style: TextStyle(
+                              color: textColor,
                               fontSize: 30,
                               fontWeight: FontWeight.bold,
                             ),
@@ -247,8 +339,8 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
                                 text: typedAnswer.isEmpty ? '?' : typedAnswer,
                                 style: TextStyle(
                                   color: typedAnswer.isEmpty
-                                      ? Colors.grey
-                                      : Colors.greenAccent.shade400,
+                                      ? textColor.withOpacity(0.5)
+                                      : accent,
                                 ),
                               ),
                             ],
@@ -256,23 +348,21 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 20),
 
-                    // Keyboard
-                    _buildKeyboard(),
+                    _buildKeyboard(accent, textColor),
 
                     const SizedBox(height: 20),
                     LinearProgressIndicator(
                       value: (currentIndex + 1) / questions.length,
-                      color: Colors.deepPurple,
-                      backgroundColor: Colors.grey[300],
+                      color: accent,
+                      backgroundColor: theme.dividerColor.withOpacity(0.2),
                       minHeight: 6,
                     ),
                     const SizedBox(height: 10),
                     Text(
                       "${currentIndex + 1}/${questions.length}",
-                      style: const TextStyle(color: Colors.black54),
+                      style: TextStyle(color: textColor.withOpacity(0.7)),
                     ),
                   ],
                 ),
@@ -281,7 +371,7 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
     );
   }
 
-  Widget _buildKeyboard() {
+  Widget _buildKeyboard(Color accent, Color textColor) {
     const keys = [
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -289,6 +379,7 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
       ['.', '0', 'BACK'],
       ['SUBMIT'],
     ];
+
     return Column(
       children: keys.map((row) {
         return Padding(
@@ -308,24 +399,21 @@ class _DailyRankedQuizScreenState extends State<DailyRankedQuizScreen> {
                     onPressed: () => _onKeyTap(key),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isSubmit
-                          ? Colors.deepPurple
+                          ? accent
                           : (isBack
-                                ? Colors.grey[300]
-                                : Colors.deepPurple[200]),
+                                ? Colors.grey.withOpacity(0.25)
+                                : accent.withOpacity(0.2)),
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     child: isBack
-                        ? const Icon(
-                            Icons.backspace_outlined,
-                            color: Colors.black,
-                          )
+                        ? const Icon(Icons.backspace_outlined)
                         : Text(
                             key,
                             style: TextStyle(
-                              color: isSubmit ? Colors.white : Colors.black,
+                              color: isSubmit ? Colors.white : textColor,
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
@@ -363,12 +451,15 @@ class DailyRankedResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = AppTheme.adaptiveAccent(context);
+    final textColor = AppTheme.adaptiveText(context);
     final mins = (timeTaken ~/ 60).toString().padLeft(2, '0');
     final secs = (timeTaken % 60).toString().padLeft(2, '0');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Daily Quiz Result"),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: accent,
       ),
       body: Padding(
         padding: const EdgeInsets.all(14.0),
@@ -380,20 +471,21 @@ class DailyRankedResultScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     "Score: $score",
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     "Correct: $correct | Incorrect: $incorrect",
-                    style: const TextStyle(fontSize: 16),
+                    style: TextStyle(fontSize: 16, color: textColor),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     "Time Taken: $mins:$secs",
-                    style: const TextStyle(fontSize: 16),
+                    style: TextStyle(fontSize: 16, color: textColor),
                   ),
                   const Divider(height: 30),
                 ],
@@ -406,7 +498,9 @@ class DailyRankedResultScreen extends StatelessWidget {
               final correctAns = user != null && user.trim() == right;
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: correctAns ? Colors.green : Colors.red,
+                  backgroundColor: correctAns
+                      ? Colors.green.withOpacity(0.9)
+                      : Colors.redAccent.withOpacity(0.9),
                   child: Text(
                     '${i + 1}',
                     style: const TextStyle(color: Colors.white),
@@ -414,6 +508,7 @@ class DailyRankedResultScreen extends StatelessWidget {
                 ),
                 title: Text(
                   q.expression.replaceAll('= ?', '= ${q.correctAnswer}'),
+                  style: TextStyle(color: textColor),
                 ),
                 subtitle: Text(
                   'Your answer: ${user ?? "-"}',

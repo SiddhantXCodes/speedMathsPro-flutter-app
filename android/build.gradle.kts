@@ -2,7 +2,9 @@ plugins {
     id("com.android.application") apply false
     id("com.android.library") apply false
     id("org.jetbrains.kotlin.android") apply false
-    id("com.google.gms.google-services") version "4.4.2" apply false
+   // Add the dependency for the Google services Gradle plugin
+  id("com.google.gms.google-services") version "4.4.2" apply false
+
 }
 
 allprojects {

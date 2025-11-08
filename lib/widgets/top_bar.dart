@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../app.dart'; // For ThemeProvider
+import 'package:firebase_auth/firebase_auth.dart';
+import '../app.dart';
 import '../theme/app_theme.dart';
+import '../screens/profile_screen.dart';
 
 class TopBar extends StatelessWidget {
   final int userStreak;
@@ -15,17 +16,15 @@ class TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDarkMode = themeProvider.isDark;
+    final themeProvider = ThemeProvider();
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDarkMode = themeProvider.isDark;
 
-    // Theme-driven tokens
     final accent = AppTheme.adaptiveAccent(context);
     final onSurface = colorScheme.onSurface;
     final mutedOnSurface = onSurface.withOpacity(0.68);
-    final streakActive = AppTheme.warningColor; // warm highlight for streaks
-    final streakInactive = colorScheme.surfaceVariant.withOpacity(0.18);
+    final streakActive = AppTheme.warningColor;
 
     return AppBar(
       backgroundColor: theme.appBarTheme.backgroundColor ?? Colors.transparent,
@@ -40,11 +39,11 @@ class TopBar extends StatelessWidget {
         child: const Text('SpeedMath'),
       ),
       actions: [
-        // Animated Theme Toggle
+        // 🌓 Theme Toggle (still available on top)
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           transitionBuilder: (child, animation) => RotationTransition(
-            turns: Tween<double>(begin: 0.70, end: 2).animate(animation),
+            turns: Tween<double>(begin: 0.7, end: 2).animate(animation),
             child: FadeTransition(opacity: animation, child: child),
           ),
           child: IconButton(
@@ -63,7 +62,7 @@ class TopBar extends StatelessWidget {
 
         const SizedBox(width: 8),
 
-        // Streak counter
+        // 🔥 Streak counter
         GestureDetector(
           onTap: onToggleToday,
           child: Row(
@@ -88,13 +87,47 @@ class TopBar extends StatelessWidget {
 
         const SizedBox(width: 12),
 
-        // Avatar
+        // 👤 Profile Icon (changes automatically after login)
         Padding(
           padding: const EdgeInsets.only(right: 10),
-          child: CircleAvatar(
-            radius: 17,
-            backgroundColor: Colors.transparent,
-            backgroundImage: const AssetImage('assets/images/elf_icon.png'),
+          child: StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              final user = snapshot.data;
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: accent.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(1.5),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: theme.colorScheme.surfaceVariant,
+                    foregroundImage: user?.photoURL != null
+                        ? NetworkImage(user!.photoURL!)
+                        : null,
+                    child: user?.photoURL == null
+                        ? Icon(
+                            Icons.person_outline_rounded,
+                            color: accent,
+                            size: 22,
+                          )
+                        : null,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],

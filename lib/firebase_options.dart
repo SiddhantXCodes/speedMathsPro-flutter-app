@@ -41,48 +41,49 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCwzeX9lyRQts0UqeUGsaBPOwnpEMdVGxY',
-    appId: '1:651038666741:web:258bb1be3341819709babc',
-    messagingSenderId: '651038666741',
-    projectId: 'speedmatharena',
-    authDomain: 'speedmatharena.firebaseapp.com',
-    storageBucket: 'speedmatharena.firebasestorage.app',
-    measurementId: 'G-JQ6CF2TDVP',
+    apiKey: 'AIzaSyBhhmaNkMXs8ZKNOYmhjjfB01U-4hVeh28',
+    appId: '1:241690806355:web:b804ca502a9290368d5ea6',
+    messagingSenderId: '241690806355',
+    projectId: 'speedmaths-pro',
+    authDomain: 'speedmaths-pro.firebaseapp.com',
+    storageBucket: 'speedmaths-pro.firebasestorage.app',
+    measurementId: 'G-HT9J4KBX44',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAk365oKCONsJbz0QOj1rdHF2Swv4rrDcM',
-    appId: '1:651038666741:android:dc96ae96442ca18909babc',
-    messagingSenderId: '651038666741',
-    projectId: 'speedmatharena',
-    storageBucket: 'speedmatharena.firebasestorage.app',
+    apiKey: 'AIzaSyAe9WysWn82TqrdZPqCVbpNeCAFdH21mfo',
+    appId: '1:241690806355:android:679011bd7aada1f58d5ea6',
+    messagingSenderId: '241690806355',
+    projectId: 'speedmaths-pro',
+    storageBucket: 'speedmaths-pro.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDrDpCY1McuWL1Saba6qtAti9FQM8j-W2I',
-    appId: '1:651038666741:ios:ad7b949d1692914409babc',
-    messagingSenderId: '651038666741',
-    projectId: 'speedmatharena',
-    storageBucket: 'speedmatharena.firebasestorage.app',
+    apiKey: 'AIzaSyDPfJOds1ruzVtbPkdPirhWqiSxHIsfZJ8',
+    appId: '1:241690806355:ios:c5bd0fae1cd2fe2e8d5ea6',
+    messagingSenderId: '241690806355',
+    projectId: 'speedmaths-pro',
+    storageBucket: 'speedmaths-pro.firebasestorage.app',
     iosBundleId: 'com.example.speedmathArena',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDrDpCY1McuWL1Saba6qtAti9FQM8j-W2I',
-    appId: '1:651038666741:ios:ad7b949d1692914409babc',
-    messagingSenderId: '651038666741',
-    projectId: 'speedmatharena',
-    storageBucket: 'speedmatharena.firebasestorage.app',
+    apiKey: 'AIzaSyDPfJOds1ruzVtbPkdPirhWqiSxHIsfZJ8',
+    appId: '1:241690806355:ios:c5bd0fae1cd2fe2e8d5ea6',
+    messagingSenderId: '241690806355',
+    projectId: 'speedmaths-pro',
+    storageBucket: 'speedmaths-pro.firebasestorage.app',
     iosBundleId: 'com.example.speedmathArena',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCwzeX9lyRQts0UqeUGsaBPOwnpEMdVGxY',
-    appId: '1:651038666741:web:198963b1a709969b09babc',
-    messagingSenderId: '651038666741',
-    projectId: 'speedmatharena',
-    authDomain: 'speedmatharena.firebaseapp.com',
-    storageBucket: 'speedmatharena.firebasestorage.app',
-    measurementId: 'G-WGW22BX8VR',
+    apiKey: 'AIzaSyBhhmaNkMXs8ZKNOYmhjjfB01U-4hVeh28',
+    appId: '1:241690806355:web:67b25137e4a2b5e18d5ea6',
+    messagingSenderId: '241690806355',
+    projectId: 'speedmaths-pro',
+    authDomain: 'speedmaths-pro.firebaseapp.com',
+    storageBucket: 'speedmaths-pro.firebasestorage.app',
+    measurementId: 'G-JLQ75FHDLC',
   );
+
 }

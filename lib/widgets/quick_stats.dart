@@ -1,9 +1,10 @@
-// lib/widgets/quick_stats.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../providers/performance_provider.dart';
 import '../theme/app_theme.dart';
+import '../screens/login_screen.dart';
 import '../screens/daily_ranked_quiz_screen.dart';
 
 class QuickStatsSection extends StatelessWidget {
@@ -16,6 +17,7 @@ class QuickStatsSection extends StatelessWidget {
     final cardColor = AppTheme.adaptiveCard(context);
     final accent = AppTheme.adaptiveAccent(context);
     final divider = Theme.of(context).dividerColor;
+    final user = FirebaseAuth.instance.currentUser;
 
     final performance = Provider.of<PerformanceProvider>(context);
     final weekData = performance.getLast7DaysDailyRankScores();
@@ -23,7 +25,7 @@ class QuickStatsSection extends StatelessWidget {
     final allTimeRank = performance.allTimeRank;
     final todayRank = performance.todayRank;
 
-    // Prepare chart points based on attempted days
+    // Prepare chart data
     final spots = <FlSpot>[];
     for (int i = 0; i < weekData.length; i++) {
       final entry = weekData[i];
@@ -32,7 +34,7 @@ class QuickStatsSection extends StatelessWidget {
       }
     }
 
-    // Add 2 upcoming blank days (future)
+    // Add future placeholders
     spots.add(FlSpot((weekData.length).toDouble(), 0));
     spots.add(FlSpot((weekData.length + 1).toDouble(), 0));
 
@@ -76,143 +78,195 @@ class QuickStatsSection extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Stats row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _statItem("All-Time Rank", "#$allTimeRank", textColor),
-              _statItem("Weekly Avg", "$avg pts", textColor),
-              todayRank == null
-                  ? GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const DailyRankedQuizScreen(),
-                          ),
-                        );
-                      },
-                      child: _ctaItem(
-                        "Today's Rank",
-                        "Take Daily Quiz →",
-                        accent,
+          // If user not logged in → show login prompt
+          if (user == null) ...[
+            Center(
+              child: Column(
+                children: [
+                  Icon(Icons.lock_outline_rounded, color: accent, size: 40),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Login to view global rank & performance stats",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: textColor.withOpacity(0.85),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.login_rounded, size: 18),
+                    label: const Text(
+                      "Sign in to Continue",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: accent, width: 1.5),
+                      foregroundColor: accent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
                       ),
-                    )
-                  : _statItem("Today's Rank", "#$todayRank", textColor),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Chart (Scrollable)
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FullStatsGraphScreen()),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "Your progress & leaderboard data will sync across devices.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: textColor.withOpacity(0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: SizedBox(
-              height: 150,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: 700,
-                  child: LineChart(
-                    LineChartData(
-                      minX: 0,
-                      maxX: 8.5, // 7 days + 2 placeholders
-                      minY: 0,
-                      maxY: maxY,
-                      clipData: const FlClipData.all(),
-                      gridData: FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(
-                        leftTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
+          ] else ...[
+            // Stats row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _statItem("All-Time Rank", "#$allTimeRank", textColor),
+                _statItem("Weekly Avg", "$avg pts", textColor),
+                todayRank == null
+                    ? GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const DailyRankedQuizScreen(),
+                            ),
+                          );
+                        },
+                        child: _ctaItem(
+                          "Today's Rank",
+                          "Take Daily Quiz →",
+                          accent,
                         ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
+                      )
+                    : _statItem("Today's Rank", "#$todayRank", textColor),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Chart
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FullStatsGraphScreen()),
+              ),
+              child: SizedBox(
+                height: 150,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: 700,
+                    child: LineChart(
+                      LineChartData(
+                        minX: 0,
+                        maxX: 8.5,
+                        minY: 0,
+                        maxY: maxY,
+                        gridData: FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        clipData: const FlClipData.all(),
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 20,
+                              getTitlesWidget: (value, _) {
+                                final labels = [
+                                  'Mon',
+                                  'Tue',
+                                  'Wed',
+                                  'Thu',
+                                  'Fri',
+                                  'Sat',
+                                  'Sun',
+                                  'Next',
+                                  'Future',
+                                ];
+                                final i = value.toInt();
+                                if (i < 0 || i >= labels.length) {
+                                  return const SizedBox();
+                                }
+                                return Text(
+                                  labels[i],
+                                  style: TextStyle(
+                                    color: textColor.withOpacity(0.6),
+                                    fontSize: 10,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                         ),
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 20,
-                            getTitlesWidget: (value, _) {
-                              final labels = [
-                                'Mon',
-                                'Tue',
-                                'Wed',
-                                'Thu',
-                                'Fri',
-                                'Sat',
-                                'Sun',
-                                'Next',
-                                'Future',
-                              ];
-                              final i = value.toInt();
-                              if (i < 0 || i >= labels.length) {
-                                return const SizedBox();
-                              }
-                              return Text(
-                                labels[i],
-                                style: TextStyle(
-                                  color: textColor.withOpacity(0.6),
-                                  fontSize: 10,
-                                ),
-                              );
+                        lineTouchData: LineTouchData(
+                          enabled: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipColor: (_) => cardColor.withOpacity(0.95),
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                return LineTooltipItem(
+                                  "${spot.y.round()} pts",
+                                  TextStyle(
+                                    color: accent,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              }).toList();
                             },
                           ),
                         ),
-                      ),
-
-                      // ✅ Correct tooltip for all fl_chart versions
-                      lineTouchData: LineTouchData(
-                        enabled: true,
-                        touchTooltipData: LineTouchTooltipData(
-                          getTooltipColor: (_) => cardColor.withOpacity(0.95),
-                          getTooltipItems: (touchedSpots) {
-                            return touchedSpots.map((spot) {
-                              return LineTooltipItem(
-                                "${spot.y.round()} pts",
-                                TextStyle(
-                                  color: accent,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            }).toList();
-                          },
-                        ),
-                      ),
-
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: spots,
-                          isCurved: true,
-                          color: accent,
-                          barWidth: 2.5,
-                          dotData: FlDotData(
-                            show: true,
-                            getDotPainter: (spot, _, __, ___) =>
-                                FlDotCirclePainter(
-                                  radius: 3.5,
-                                  color: accent,
-                                  strokeWidth: 1,
-                                  strokeColor: accent.withOpacity(0.3),
-                                ),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: spots,
+                            isCurved: true,
+                            color: accent,
+                            barWidth: 2.5,
+                            dotData: FlDotData(
+                              show: true,
+                              getDotPainter: (spot, _, __, ___) =>
+                                  FlDotCirclePainter(
+                                    radius: 3.5,
+                                    color: accent,
+                                    strokeWidth: 1,
+                                    strokeColor: accent.withOpacity(0.3),
+                                  ),
+                            ),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: accent.withOpacity(0.18),
+                            ),
                           ),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: accent.withOpacity(0.18),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -262,7 +316,7 @@ class QuickStatsSection extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-// Full-screen graph screen
+// Full-screen graph screen (unchanged)
 // ─────────────────────────────────────────────
 class FullStatsGraphScreen extends StatelessWidget {
   const FullStatsGraphScreen({super.key});

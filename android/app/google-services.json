@@ -1,26 +1,87 @@
 {
   "project_info": {
-    "project_number": "651038666741",
-    "project_id": "speedmatharena",
-    "storage_bucket": "speedmatharena.firebasestorage.app"
+    "project_number": "241690806355",
+    "project_id": "speedmaths-pro",
+    "storage_bucket": "speedmaths-pro.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:651038666741:android:dc96ae96442ca18909babc",
+        "mobilesdk_app_id": "1:241690806355:android:679011bd7aada1f58d5ea6",
         "android_client_info": {
           "package_name": "com.example.speedmath_arena"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "241690806355-6b3elphnm3vpr8dbvmeslfff32rsnfd9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.speedmath_arena",
+            "certificate_hash": "ad57f067ca773076606911bff8481c2cd69c3bb2"
+          }
+        },
+        {
+          "client_id": "241690806355-em2gofagtf72dloeifmsivfk010s6icf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyAk365oKCONsJbz0QOj1rdHF2Swv4rrDcM"
+          "current_key": "AIzaSyAe9WysWn82TqrdZPqCVbpNeCAFdH21mfo"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "241690806355-em2gofagtf72dloeifmsivfk010s6icf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "241690806355-pkplrah7ucju5ntp4rduhj6eapo7g85l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.speedmathArena"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:241690806355:android:7ced932ca6bcd4a18d5ea6",
+        "android_client_info": {
+          "package_name": "com.vexon.speedmathspro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "241690806355-em2gofagtf72dloeifmsivfk010s6icf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAe9WysWn82TqrdZPqCVbpNeCAFdH21mfo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "241690806355-em2gofagtf72dloeifmsivfk010s6icf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "241690806355-pkplrah7ucju5ntp4rduhj6eapo7g85l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.speedmathArena"
+              }
+            }
+          ]
         }
       }
     }
