@@ -1,0 +1,12 @@
+import '../../data/repositories/home_repository.dart';
+
+/// Encapsulates how Home data is loaded (offline + online)
+class LoadHomeData {
+  final HomeRepository repository;
+  LoadHomeData(this.repository);
+
+  Future<Map<String, dynamic>> execute() async {
+    final offline = repository.getLocalActivity();
+    return {'offline': offline};
+  }
+}

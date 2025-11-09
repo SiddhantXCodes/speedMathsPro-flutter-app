@@ -1,30 +1,18 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/home_screen.dart';
-import 'providers/performance_provider.dart';
-import 'providers/practice_log_provider.dart';
-import 'theme/app_theme.dart';
+import 'presentation/providers/theme_provider.dart';
+import './features/performance/presentation/providers/performance_provider.dart';
+import './features/practice/presentation/providers/practice_log_provider.dart';
+import 'presentation/theme/app_theme.dart';
+import 'features/home/presentation/screens/home_screen.dart'; // ✅ moved home to features
+import './core/sync/sync_manager.dart'; // ✅ for future global sync
+import './core/firebase/firebase_options.dart'; // optional future use
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();
 
-/// ✅ ThemeProvider — controls light/dark mode across app
-class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.light;
-
-  ThemeMode get themeMode => _themeMode;
-  bool get isDark => _themeMode == ThemeMode.dark;
-
-  void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.dark
-        ? ThemeMode.light
-        : ThemeMode.dark;
-    notifyListeners(); // 🚀 triggers full rebuild
-  }
-}
-
-/// ✅ Root app
+/// 🧩 Root Application Widget
 class SpeedMathApp extends StatelessWidget {
   const SpeedMathApp({super.key});
 
@@ -32,14 +20,17 @@ class SpeedMathApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // global theme provider
+        // 🌗 Global Theme
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
 
-        // app-specific providers
+        // 📊 App-wide Data Providers
         ChangeNotifierProvider(
-          create: (_) => PerformanceProvider()..loadFromStorage(),
+          create: (_) => PerformanceProvider()..loadFromLocal(),
         ),
         ChangeNotifierProvider(create: (_) => PracticeLogProvider()),
+
+        // 🧠 Future: Global app state (sync, network, etc.)
+        // ChangeNotifierProvider(create: (_) => AppProvider(syncManager: SyncManager())),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -50,18 +41,17 @@ class SpeedMathApp extends StatelessWidget {
             duration: const Duration(milliseconds: 450),
             curve: Curves.easeInOutCubic,
             child: MaterialApp(
-              title: 'SpeedMaths Pro',
+              title: 'SpeedMath Pro',
               debugShowCheckedModeBanner: false,
 
-              // 🧠 Attach theme data
               themeMode: themeProvider.themeMode,
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               navigatorObservers: [routeObserver],
 
-              // 🧩 Builder + ValueKey ensures instant redraw on toggle
+              // 🏠 Home Screen
               home: Builder(
-                key: ValueKey(isDark),
+                key: ValueKey(isDark), // forces rebuild on theme toggle
                 builder: (_) => const HomeScreen(),
               ),
             ),
