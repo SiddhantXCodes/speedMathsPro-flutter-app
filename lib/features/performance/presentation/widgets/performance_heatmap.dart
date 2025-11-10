@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import '../../../home/presentation/widgets/heatmap_section.dart';
 import '../../../practice/presentation/providers/practice_log_provider.dart';
 import '../../../performance/presentation/providers/performance_provider.dart';
-
 import '../../../../presentation/theme/app_theme.dart';
 
 class PerformanceHeatmap extends StatelessWidget {
   final PerformanceProvider perf;
   final PracticeLogProvider log;
+
   const PerformanceHeatmap({super.key, required this.perf, required this.log});
 
   @override
@@ -34,17 +34,18 @@ class PerformanceHeatmap extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+
+        // ✅ Matches the new HeatmapSection constructor
         HeatmapSection(
           isDarkMode: isDark,
           activity: merged,
-          cellSize: 12,
-          cellSpacing: 3,
           colorForValue: _colorForValue,
         ),
       ],
     );
   }
 
+  /// 🧩 Merge Offline + Online Maps
   Map<DateTime, int> _mergeActivity(
     Map<DateTime, int> offline,
     Map<DateTime, int> online,
@@ -56,6 +57,7 @@ class PerformanceHeatmap extends StatelessWidget {
     return merged.map((k, v) => MapEntry(k, v.clamp(0, 5)));
   }
 
+  /// 🎨 GitHub-like color scale
   Color _colorForValue(int v) {
     switch (v.clamp(0, 4)) {
       case 0:

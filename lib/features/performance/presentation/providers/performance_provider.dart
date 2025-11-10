@@ -129,7 +129,7 @@ class PerformanceProvider extends ChangeNotifier {
       } else {
         _currentStreak = 0;
       }
-      notifyListeners();
+
       return _currentStreak;
     } catch (e) {
       debugPrint("⚠️ Failed to fetch current streak: $e");

@@ -7,6 +7,7 @@ import '../../features/practice/data/practice_repository.dart';
 import '../../features/performance/data/performance_repository.dart';
 import '../../features/quiz/data/models/quiz_session_model.dart';
 import '../../features/quiz/data/repositories/quiz_repository.dart';
+import '../services/hive_service.dart';
 
 /// 🌐 SyncManager — Unified Hybrid Sync System
 ///
@@ -29,7 +30,6 @@ class SyncManager {
   final PerformanceRepository performanceRepository = PerformanceRepository();
 
   StreamSubscription<ConnectivityResult>? _connectivitySub;
-  Box? _practiceBox;
 
   bool _isSyncing = false;
   DateTime _lastSyncTime = DateTime.fromMillisecondsSinceEpoch(0);
@@ -38,7 +38,13 @@ class SyncManager {
   // 🚀 Start monitoring connectivity
   // ---------------------------------------------------------------------------
   Future<void> start() async {
-    _practiceBox ??= await _openPracticeBox();
+    // ✅ Wait for HiveService initialization before starting sync
+    int attempts = 0;
+    while (!HiveService.isBoxOpen('practice_logs') && attempts < 10) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+    }
+
     log("🔄 SyncManager started — monitoring connectivity...");
 
     _connectivitySub = Connectivity().onConnectivityChanged.listen((
@@ -65,16 +71,6 @@ class SyncManager {
   void stop() {
     _connectivitySub?.cancel();
     log("🛑 SyncManager stopped listening to connectivity.");
-  }
-
-  // ---------------------------------------------------------------------------
-  // 📦 Open practice Hive box safely
-  // ---------------------------------------------------------------------------
-  Future<Box> _openPracticeBox() async {
-    if (Hive.isBoxOpen('practice_logs')) {
-      return Hive.box('practice_logs');
-    }
-    return await Hive.openBox('practice_logs');
   }
 
   // ---------------------------------------------------------------------------
@@ -112,7 +108,12 @@ class SyncManager {
   // ---------------------------------------------------------------------------
   Future<void> _syncPendingQuizSessions() async {
     try {
-      final box = _practiceBox ??= await _openPracticeBox();
+      if (!HiveService.isBoxOpen('practice_logs')) {
+        log("⚠️ Hive box 'practice_logs' not open yet — skipping sync.");
+        return;
+      }
+
+      final box = Hive.box('practice_logs');
       final sessions = box.values.toList();
 
       if (sessions.isEmpty) {
@@ -125,14 +126,15 @@ class SyncManager {
 
       for (final raw in sessions) {
         try {
-          final map = Map<String, dynamic>.from(raw);
+          // Defensive: convert any object to map safely
+          final map = raw is Map ? Map<String, dynamic>.from(raw) : raw.toMap();
           final session = QuizSessionModel.fromMap(map);
 
           // Only sync ranked (daily) quiz sessions
           if (session.category.toLowerCase().contains('ranked')) {
             await quizRepository.saveRankedResult(session);
             success++;
-            await _deleteSyncedSession(raw);
+            await _deleteSyncedSession(box, raw);
           }
         } catch (e) {
           failed++;
@@ -149,14 +151,12 @@ class SyncManager {
   // ---------------------------------------------------------------------------
   // 🧹 Delete successfully synced Hive entries
   // ---------------------------------------------------------------------------
-  Future<void> _deleteSyncedSession(dynamic raw) async {
+  Future<void> _deleteSyncedSession(Box box, dynamic raw) async {
     try {
-      final box = _practiceBox ??= await _openPracticeBox();
       final key = box.keys.firstWhere(
         (k) => box.get(k) == raw,
         orElse: () => null,
       );
-
       if (key != null) {
         await box.delete(key);
         log("🧹 Deleted synced Hive entry (key: $key)");

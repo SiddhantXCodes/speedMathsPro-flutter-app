@@ -65,29 +65,35 @@ class _TopBarState extends State<TopBar> {
       titleSpacing: 16, // ✅ consistent padding from left edge
       title: Text(
         'SpeedMath Pro',
-        style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: textColor,
+          fontSize: 20,
+        ),
       ),
       actions: [
         // 🌗 Theme toggle
-        IconButton(
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            transitionBuilder: (child, anim) => RotationTransition(
-              turns: Tween(begin: 0.7, end: 1.0).animate(anim),
-              child: FadeTransition(opacity: anim, child: child),
+        SizedBox(
+          width: 40,
+          child: IconButton(
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              transitionBuilder: (child, anim) => RotationTransition(
+                turns: Tween(begin: 0.7, end: 1.0).animate(anim),
+                child: FadeTransition(opacity: anim, child: child),
+              ),
+              child: Icon(
+                isDarkMode ? Icons.wb_sunny_rounded : Icons.dark_mode_rounded,
+                key: ValueKey<bool>(isDarkMode),
+                color: accent,
+                size: 24,
+              ),
             ),
-            child: Icon(
-              isDarkMode ? Icons.wb_sunny_rounded : Icons.dark_mode_rounded,
-              key: ValueKey<bool>(isDarkMode),
-              color: accent,
-              size: 26,
-            ),
+            tooltip: isDarkMode
+                ? 'Switch to Light Mode'
+                : 'Switch to Dark Mode',
+            onPressed: () => themeProvider.toggleTheme(),
           ),
-          tooltip: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-          onPressed: () {
-            // Instantly toggle theme
-            Provider.of<ThemeProvider>(context, listen: false).toggleTheme();
-          },
         ),
 
         const SizedBox(width: 8),

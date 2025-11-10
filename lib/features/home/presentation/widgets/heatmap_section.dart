@@ -4,17 +4,13 @@ import '../../../../presentation/theme/app_theme.dart';
 
 class HeatmapSection extends StatefulWidget {
   final bool isDarkMode;
-  final Map<DateTime, int> activity;
-  final double cellSize;
-  final double cellSpacing;
+  final Map<dynamic, int> activity;
   final Color Function(int) colorForValue;
 
   const HeatmapSection({
     super.key,
     required this.isDarkMode,
     required this.activity,
-    required this.cellSize,
-    required this.cellSpacing,
     required this.colorForValue,
   });
 
@@ -23,75 +19,50 @@ class HeatmapSection extends StatefulWidget {
 }
 
 class _HeatmapSectionState extends State<HeatmapSection> {
-  final ScrollController _scrollController = ScrollController();
+  late Map<DateTime, int> normalizedActivity;
+  late DateTime currentMonth;
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    normalizedActivity = _normalizeActivity(widget.activity);
+    currentMonth = DateTime.now().toLocal();
+  }
+
+  Map<DateTime, int> _normalizeActivity(Map<dynamic, int> map) {
+    final data = <DateTime, int>{};
+    map.forEach((key, value) {
+      DateTime? date;
+      if (key is DateTime) {
+        date = DateTime(key.year, key.month, key.day);
+      } else if (key is String) {
+        try {
+          date = DateTime.parse(key);
+        } catch (_) {}
+      }
+      if (date != null) {
+        data[date] = (data[date] ?? 0) + (value ?? 0);
+      }
+    });
+    return data;
   }
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now().toLocal();
     final textColor = AppTheme.adaptiveText(context);
     final bgColor = AppTheme.adaptiveCard(context);
-    final accent = Theme.of(context).colorScheme.primary;
-    final now = DateTime.now();
 
-    // Normalize the incoming activity map to date-only keys (yyyy-mm-dd)
-    final normalizedActivity = <DateTime, int>{};
-    widget.activity.forEach((k, v) {
-      final dt = DateTime(k.year, k.month, k.day);
-      normalizedActivity[dt] = (normalizedActivity[dt] ?? 0) + v;
-    });
-
-    // ✅ Rolling 12-month window (from 12 months ago till this month)
-    final firstVisibleMonth = DateTime(now.year, now.month - 11, 1);
-    final startDate = firstVisibleMonth;
-    final endDate = DateTime(now.year, now.month + 1, 0);
-
-    // ✅ Generate days within the range
-    final allDays = _generateDays(startDate, endDate);
-    final weeks = _splitIntoWeeks(allDays);
-    final monthPositions = _getMonthPositions(weeks);
-
-    // 🧭 Auto-scroll to current month (fallback to closest month if exact not found)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      int? currentMonthWeekIndex = monthPositions[now.month];
-      if (currentMonthWeekIndex == null && monthPositions.isNotEmpty) {
-        // find the nearest month entry (by month distance)
-        final months = monthPositions.keys.toList()..sort();
-        int nearest = months.first;
-        int bestDiff = (now.month - nearest).abs();
-        for (final m in months) {
-          final diff = (now.month - m).abs();
-          if (diff < bestDiff) {
-            bestDiff = diff;
-            nearest = m;
-          }
-        }
-        currentMonthWeekIndex = monthPositions[nearest];
-      }
-
-      if (currentMonthWeekIndex != null) {
-        final scrollOffset =
-            currentMonthWeekIndex *
-            (widget.cellSize + widget.cellSpacing * 1.5);
-        _scrollController.animateTo(
-          scrollOffset.clamp(
-            0.0,
-            _scrollController.position.maxScrollExtent,
-          ), // safe clamp
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
+    final days = _generateMonthDays(currentMonth);
+    final monthLabel = DateFormat('MMMM yyyy').format(currentMonth);
+    final totalSessions = days.fold<int>(
+      0,
+      (sum, d) => sum + (normalizedActivity[d] ?? 0),
+    );
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(14),
@@ -102,7 +73,7 @@ class _HeatmapSectionState extends State<HeatmapSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Header: Month + Year switcher
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -114,119 +85,73 @@ class _HeatmapSectionState extends State<HeatmapSection> {
                   color: textColor,
                 ),
               ),
-              Text(
-                "${now.year}",
-                style: TextStyle(
-                  color: textColor.withOpacity(0.7),
-                  fontSize: 13,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _changeMonth(-1),
+                    icon: Icon(Icons.chevron_left, color: textColor),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  Text(
+                    monthLabel,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: textColor.withOpacity(0.9),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _changeMonth(1),
+                    icon: Icon(Icons.chevron_right, color: textColor),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 10),
 
-          // Heatmap grid + month labels
-          SingleChildScrollView(
-            controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 🔥 Heatmap grid
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (int w = 0; w < weeks.length; w++) ...[
-                      // Add gap before a new month
-                      if (monthPositions.containsValue(w) && w != 0)
-                        SizedBox(width: widget.cellSpacing * 4),
-
-                      Column(
-                        children: [
-                          for (int d = 0; d < 7; d++) ...[
-                            _buildCell(
-                              context,
-                              weeks[w][d],
-                              normalizedActivity,
-                            ),
-                            SizedBox(height: widget.cellSpacing),
-                          ],
-                        ],
-                      ),
-                      SizedBox(width: widget.cellSpacing),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // 🔥 Month labels (centered & spaced properly)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (int w = 0; w < weeks.length; w++) ...[
-                      if (monthPositions.containsValue(w) && w != 0)
-                        SizedBox(width: widget.cellSpacing * 4),
-
-                      SizedBox(
-                        width: (widget.cellSize + widget.cellSpacing),
-                        child: monthPositions.containsValue(w)
-                            ? Center(
-                                child: Text(
-                                  _monthForWeek(monthPositions, w),
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight:
-                                        now.month ==
-                                            _monthIndexForWeek(
-                                              monthPositions,
-                                              w,
-                                            )
-                                        ? FontWeight.bold
-                                        : FontWeight.w500,
-                                    color:
-                                        now.month ==
-                                            _monthIndexForWeek(
-                                              monthPositions,
-                                              w,
-                                            )
-                                        ? accent
-                                        : textColor.withOpacity(0.7),
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // Legend
+          // Weekdays header (Monday-start)
           Row(
-            children: [
-              Text('Less', style: TextStyle(fontSize: 12, color: textColor)),
-              const SizedBox(width: 8),
-              ...List.generate(4, (i) {
-                final val = i + 1;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: widget.colorForValue(val),
-                      borderRadius: BorderRadius.circular(2),
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                .map(
+                  (d) => Expanded(
+                    child: Center(
+                      child: Text(
+                        d,
+                        style: TextStyle(
+                          color: textColor.withOpacity(0.6),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
-                );
-              }),
-              const SizedBox(width: 8),
-              Text('More', style: TextStyle(fontSize: 12, color: textColor)),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 6),
+
+          // Calendar grid
+          _buildCalendarGrid(days, textColor, bgColor, now),
+
+          const SizedBox(height: 10),
+
+          // Legend + Summary
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildLegend(textColor),
+              Text(
+                "${DateFormat('MMM').format(currentMonth)}: $totalSessions sessions",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textColor.withOpacity(0.7),
+                ),
+              ),
             ],
           ),
         ],
@@ -234,149 +159,154 @@ class _HeatmapSectionState extends State<HeatmapSection> {
     );
   }
 
-  // 🔹 Build each heatmap cell
-  Widget _buildCell(
-    BuildContext context,
-    DateTime? date,
-    Map<DateTime, int> normalizedActivity,
+  void _changeMonth(int offset) {
+    setState(() {
+      currentMonth = DateTime(currentMonth.year, currentMonth.month + offset);
+    });
+  }
+
+  Widget _buildCalendarGrid(
+    List<DateTime> days,
+    Color textColor,
+    Color bgColor,
+    DateTime now,
   ) {
-    if (date == null) {
-      return Container(width: widget.cellSize, height: widget.cellSize);
+    // Flutter weekday() returns 1=Mon … 7=Sun
+    final firstWeekday = DateTime(days.first.year, days.first.month, 1).weekday;
+    final startPadding = firstWeekday - 1; // make Monday = start
+    final totalCells = startPadding + days.length;
+    final rows = <Widget>[];
+
+    for (int i = 0; i < totalCells; i += 7) {
+      final weekCells = <Widget>[];
+      for (int j = 0; j < 7; j++) {
+        final index = i + j - startPadding;
+        if (index < 0 || index >= days.length) {
+          weekCells.add(const Expanded(child: SizedBox()));
+        } else {
+          final day = days[index];
+          final value = normalizedActivity[day] ?? 0;
+          final color = _heatmapColor(value);
+          final isToday = DateUtils.isSameDay(day, now);
+
+          weekCells.add(
+            Expanded(
+              child: GestureDetector(
+                onTap: value > 0
+                    ? () => _showDayDialog(day, value, bgColor, textColor)
+                    : null,
+                child: Container(
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(6),
+                    border: isToday
+                        ? Border.all(color: const Color(0xFF2ECC71), width: 1.5)
+                        : null,
+                  ),
+                  height: 44,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "${day.day}",
+                        style: TextStyle(
+                          color: textColor.withOpacity(0.9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (value > 0)
+                        Text(
+                          "$value",
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.7),
+                            fontSize: 10,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+      }
+      rows.add(Row(children: weekCells));
     }
 
-    final normalized = DateTime(date.year, date.month, date.day);
-    final value = normalizedActivity[normalized] ?? 0;
-    final color = widget.colorForValue(value);
+    return Column(children: rows);
+  }
 
-    return GestureDetector(
-      onTap: value > 0
-          ? () {
-              final formatted = DateFormat('MMM d, yyyy').format(date);
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  backgroundColor: AppTheme.adaptiveCard(context),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  title: Text(
-                    'Activity on $formatted',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.adaptiveText(context),
-                    ),
-                  ),
-                  content: Text(
-                    '$value practice sessions completed',
-                    style: TextStyle(
-                      color: AppTheme.adaptiveText(context).withOpacity(0.8),
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("OK"),
-                    ),
-                  ],
-                ),
-              );
-            }
-          : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: widget.cellSize,
-        height: widget.cellSize,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(3),
+  Widget _buildLegend(Color textColor) {
+    final steps = [0, 3, 6, 9, 12];
+    return Row(
+      children: [
+        ...steps.map(
+          (v) => Container(
+            width: 14,
+            height: 14,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: _heatmapColor(v),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
         ),
+        const SizedBox(width: 4),
+        Text(
+          "0+  3+  6+  9+  12+",
+          style: TextStyle(fontSize: 11, color: textColor.withOpacity(0.6)),
+        ),
+      ],
+    );
+  }
+
+  void _showDayDialog(
+    DateTime date,
+    int value,
+    Color bgColor,
+    Color textColor,
+  ) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: bgColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text(
+          DateFormat('EEE, MMM d').format(date),
+          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          "$value practice sessions completed",
+          style: TextStyle(color: textColor.withOpacity(0.8)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("OK", style: TextStyle(color: textColor)),
+          ),
+        ],
       ),
     );
   }
 
-  // 🔹 Generate days
-  List<DateTime> _generateDays(DateTime start, DateTime end) {
+  // ✅ Heatmap gradient (GitHub-style green shades)
+  Color _heatmapColor(int value) {
+    if (value <= 0) return Colors.transparent;
+    if (value <= 2) return const Color(0xFF9BE9A8);
+    if (value <= 5) return const Color(0xFF40C463);
+    if (value <= 8) return const Color(0xFF30A14E);
+    return const Color(0xFF216E39);
+  }
+
+  List<DateTime> _generateMonthDays(DateTime month) {
+    final first = DateTime(month.year, month.month, 1);
+    final last = DateTime(month.year, month.month + 1, 0);
     final days = <DateTime>[];
-    for (var d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
+    for (var d = first; !d.isAfter(last); d = d.add(const Duration(days: 1))) {
       days.add(d);
     }
     return days;
-  }
-
-  // 🔹 Split days into weeks
-  List<List<DateTime?>> _splitIntoWeeks(List<DateTime> allDays) {
-    final List<List<DateTime?>> weeks = [];
-
-    if (allDays.isEmpty) return weeks;
-
-    // Determine the weekday index for the first day (0 = Sunday, 6 = Saturday)
-    // DateTime.weekday: Monday=1 ... Sunday=7, so convert to Sunday=0..Saturday=6
-    final first = allDays.first;
-    final firstOffset = (first.weekday % 7);
-
-    List<DateTime?> current = List.filled(7, null);
-    int index = 0;
-
-    // Fill first week starting at firstOffset
-    for (int i = firstOffset; i < 7 && index < allDays.length; i++) {
-      current[i] = allDays[index++];
-    }
-    weeks.add(List.from(current));
-
-    // Fill remaining full weeks
-    while (index < allDays.length) {
-      current = List.filled(7, null);
-      for (int i = 0; i < 7 && index < allDays.length; i++) {
-        current[i] = allDays[index++];
-      }
-      weeks.add(List.from(current));
-    }
-    return weeks;
-  }
-
-  // 🔹 Map: month → first week index
-  Map<int, int> _getMonthPositions(List<List<DateTime?>> weeks) {
-    final map = <int, int>{};
-    for (int w = 0; w < weeks.length; w++) {
-      for (final d in weeks[w]) {
-        if (d == null) continue;
-        // Only set if not already present (we want first week index for the month)
-        map.putIfAbsent(d.month, () => w);
-      }
-    }
-    return map;
-  }
-
-  // 🔹 Get month name
-  String _monthForWeek(Map<int, int> positions, int weekIndex) {
-    final entry = positions.entries.firstWhere(
-      (e) => e.value == weekIndex,
-      orElse: () => const MapEntry(0, -1),
-    );
-    if (entry.key == 0) return '';
-    const months = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[entry.key];
-  }
-
-  int _monthIndexForWeek(Map<int, int> positions, int weekIndex) {
-    final entry = positions.entries.firstWhere(
-      (e) => e.value == weekIndex,
-      orElse: () => const MapEntry(0, -1),
-    );
-    return entry.key;
   }
 }

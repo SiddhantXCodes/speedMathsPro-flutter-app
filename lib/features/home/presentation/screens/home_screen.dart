@@ -15,7 +15,6 @@ import '../widgets/master_basics_section.dart';
 
 // 📊 Feature Screens
 import '../../../performance/presentation/screens/performance_screen.dart';
-import '../../../practice/presentation/providers/practice_log_provider.dart';
 import '../../../quiz/presentation/screens/setup/mixed_quiz_setup_screen.dart';
 import '../../../practice/presentation/screens/attempts_history_screen.dart';
 
@@ -29,6 +28,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
+  // kept as constants in case you want to re-enable size parameters later
   final double cellSize = 12;
   final double cellSpacing = 4;
 
@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         listen: false,
       );
       await performance.loadFromLocal(forceReload: true);
-      setState(() {});
+      // No need to call setState(); Provider notifies automatically
     } catch (e) {
       debugPrint("⚠️ Failed to refresh data: $e");
     }
@@ -115,11 +115,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 const SizedBox(height: 20),
 
                 /// 🔥 Activity Heatmap (Offline + Online)
+                // NOTE: HeatmapSection signature changed — it no longer accepts
+                // cellSize/cellSpacing named params. Pass activity + colorForValue.
                 HeatmapSection(
                   isDarkMode: theme.brightness == Brightness.dark,
                   activity: activity,
-                  cellSize: cellSize,
-                  cellSpacing: cellSpacing,
                   colorForValue: _colorForValue,
                 ),
 

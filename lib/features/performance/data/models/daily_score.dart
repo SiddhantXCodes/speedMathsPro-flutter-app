@@ -29,9 +29,9 @@ class DailyScore extends HiveObject {
     this.isRanked = true,
   });
 
-  /// ----------------------------------------------------------
-  /// 🔁 Convert model → Map (for Firebase/Hive storage)
-  /// ----------------------------------------------------------
+  // ----------------------------------------------------------
+  // 🔁 Convert model → Map (for Firebase/Hive storage)
+  // ----------------------------------------------------------
   Map<String, dynamic> toMap() => {
     'date': date.toIso8601String(),
     'score': score,
@@ -40,22 +40,41 @@ class DailyScore extends HiveObject {
     'isRanked': isRanked,
   };
 
-  /// ----------------------------------------------------------
-  /// 🧩 Convert Map → model (for rebuilding from cache or Firebase)
-  /// ----------------------------------------------------------
+  // ----------------------------------------------------------
+  // 🧩 Convert Map → model (safe backward-compatible parsing)
+  // ----------------------------------------------------------
   factory DailyScore.fromMap(Map<String, dynamic> map) {
+    dynamic rawScore = map['score'];
+    dynamic rawTotal = map['totalQuestions'];
+    dynamic rawTime = map['timeTakenSeconds'];
+    dynamic rawRanked = map['isRanked'];
+
     return DailyScore(
-      date: DateTime.tryParse(map['date'] ?? '') ?? DateTime.now(),
-      score: map['score'] ?? 0,
-      totalQuestions: map['totalQuestions'] ?? 0,
-      timeTakenSeconds: map['timeTakenSeconds'] ?? 0,
-      isRanked: map['isRanked'] ?? true,
+      date: DateTime.tryParse(map['date']?.toString() ?? '') ?? DateTime.now(),
+
+      // ✅ Safely convert mixed or null values to int
+      score: (rawScore is num)
+          ? rawScore.toInt()
+          : int.tryParse(rawScore?.toString() ?? '0') ?? 0,
+
+      totalQuestions: (rawTotal is num)
+          ? rawTotal.toInt()
+          : int.tryParse(rawTotal?.toString() ?? '0') ?? 0,
+
+      timeTakenSeconds: (rawTime is num)
+          ? rawTime.toInt()
+          : int.tryParse(rawTime?.toString() ?? '0') ?? 0,
+
+      // ✅ Safely convert any value to bool (fallback = true)
+      isRanked: (rawRanked is bool)
+          ? rawRanked
+          : (rawRanked?.toString().toLowerCase() == 'true'),
     );
   }
 
-  /// ----------------------------------------------------------
-  /// 🧾 For quick debug prints
-  /// ----------------------------------------------------------
+  // ----------------------------------------------------------
+  // 🧾 For quick debug prints
+  // ----------------------------------------------------------
   @override
   String toString() {
     return 'DailyScore(date: $date, score: $score, total: $totalQuestions, '
