@@ -5,8 +5,12 @@ import '../../../../presentation/theme/app_theme.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
 import '../../../quiz/presentation/screens/daily_ranked_quiz_entry.dart';
 import '../../../quiz/presentation/screens/leaderboard_screen.dart';
+import '../../../performance/presentation/screens/performance_screen.dart';
 import '../../../../core/services/hive_service.dart';
+import '../../../quiz/presentation/screens/quiz_screen.dart'; // 👈 make sure this screen exists
 
+/// ⚡ Unified Quick Stats Section (Hybrid Offline + Online)
+/// Shows offline practice stats for all users and ranked data for signed-in users.
 class QuickStatsSection extends StatefulWidget {
   final bool isDarkMode;
   const QuickStatsSection({super.key, required this.isDarkMode});
@@ -19,10 +23,11 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
     with WidgetsBindingObserver {
   int? todayRank;
   int? allTimeRank;
-  double weeklyAverage = 0;
+  double avgScore = 0.0;
   bool _loading = true;
+  bool _attemptedToday = false;
 
-  // --- offline stats ---
+  // --- Offline stats ---
   int offlineSessions = 0;
   int offlineCorrect = 0;
   int offlineIncorrect = 0;
@@ -43,9 +48,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _fetchStats();
-    }
+    if (state == AppLifecycleState.resumed) _fetchStats();
   }
 
   String _dateKey(DateTime d) =>
@@ -53,7 +56,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
 
   Future<void> _fetchStats() async {
     try {
-      // --- Load offline stats first (always fast) ---
+      // --- Load offline stats first ---
       final localStats = HiveService.getStats() ?? {};
       offlineSessions = (localStats['sessions'] ?? 0) as int;
       offlineCorrect = (localStats['totalCorrect'] ?? 0) as int;
@@ -69,7 +72,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
       final firestore = FirebaseFirestore.instance;
       final todayKey = _dateKey(DateTime.now());
 
-      // ---- Fetch today rank ----
+      // ---- Fetch today's leaderboard rank ----
       final dailyRef = firestore
           .collection('daily_leaderboard')
           .doc(todayKey)
@@ -81,15 +84,17 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
 
       int rank = 1;
       todayRank = null;
+      _attemptedToday = false;
       for (final doc in snapshot.docs) {
         if (doc.id == user.uid) {
           todayRank = rank;
+          _attemptedToday = true;
           break;
         }
         rank++;
       }
 
-      // ---- Fetch all-time rank ----
+      // ---- Fetch all-time rank + avg score ----
       final allRef = firestore.collection('alltime_leaderboard').doc(user.uid);
       final allSnap = await allRef.get();
 
@@ -98,7 +103,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
         final data = allSnap.data()!;
         final quizzes = (data['quizzesTaken'] ?? 1).toDouble();
         final totalScore = (data['totalScore'] ?? 0).toDouble();
-        weeklyAverage = quizzes > 0 ? totalScore / quizzes : 0;
+        avgScore = quizzes > 0 ? totalScore / quizzes : 0;
       }
 
       if (mounted) setState(() => _loading = false);
@@ -131,241 +136,300 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
     final accent = AppTheme.adaptiveAccent(context);
     final cardColor = AppTheme.adaptiveCard(context);
     final textColor = AppTheme.adaptiveText(context);
-    final divider = Theme.of(context).dividerColor;
 
     if (_loading) {
       return Container(
         height: 180,
         alignment: Alignment.center,
-        child: const CircularProgressIndicator(),
+        child: const CircularProgressIndicator(strokeWidth: 2),
       );
     }
 
+    // --- Derived stats (always available offline) ---
+    final totalAttempts = offlineCorrect + offlineIncorrect;
+    final accuracy = totalAttempts > 0
+        ? (offlineCorrect / totalAttempts) * 100
+        : 0;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: divider.withOpacity(0.06),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
+          // 🧭 Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 "Quick Stats",
                 style: TextStyle(
-                  fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  fontSize: 16,
                   color: textColor,
                 ),
               ),
-              IconButton(
-                icon: Icon(Icons.refresh_rounded, color: accent),
-                tooltip: "Refresh stats",
+              TextButton.icon(
                 onPressed: () {
-                  setState(() => _loading = true);
-                  _fetchStats();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PerformanceScreen(),
+                    ),
+                  );
                 },
+                icon: Icon(Icons.insights_rounded, color: accent, size: 20),
+                label: Text(
+                  "Performance",
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          if (user == null)
-            _buildLoginPrompt(context, accent, textColor)
+
+          // 🔹 Online or Offline Display Logic
+          if (user != null)
+            _buildOnlineStats(accent)
           else
-            _buildStats(context, accent, textColor),
+            _buildOfflineOnlyStats(accent, textColor, context),
+
           const SizedBox(height: 16),
-          _buildOfflineStats(context, textColor, accent),
+
+          // 📶 Always visible — offline stats
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _miniStat(
+                Icons.school_rounded,
+                "Sessions",
+                offlineSessions.toString(),
+                accent,
+              ),
+              _miniStat(
+                Icons.check_circle_rounded,
+                "Accuracy",
+                "${accuracy.toStringAsFixed(1)}%",
+                accent,
+              ),
+              _miniStat(
+                Icons.timer_rounded,
+                "Avg Time",
+                "${offlineAvgTime.toStringAsFixed(1)}s",
+                accent,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  // --- Online Stats Display (kept same) ---
-  Widget _buildStats(BuildContext context, Color accent, Color textColor) {
+  // --- Online Stats Section ---
+  Widget _buildOnlineStats(Color accent) {
     return Column(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _statItem(
-              "All-Time Rank",
-              allTimeRank != null ? "#$allTimeRank" : "--",
-              textColor,
+            _miniStat(
+              Icons.emoji_events_rounded,
+              "Today Rank",
+              todayRank != null ? "#$todayRank" : "—",
+              accent,
             ),
-            _statItem(
+            _miniStat(
+              Icons.bar_chart_rounded,
+              "All-Time",
+              allTimeRank != null ? "#$allTimeRank" : "—",
+              accent,
+            ),
+            _miniStat(
+              Icons.speed_rounded,
               "Avg Score",
-              "${weeklyAverage.toStringAsFixed(1)} pts",
-              textColor,
+              avgScore.toStringAsFixed(1),
+              accent,
             ),
-            todayRank == null
-                ? GestureDetector(
-                    onTap: () {
+          ],
+        ),
+        const SizedBox(height: 20),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+          decoration: BoxDecoration(
+            color: accent.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            children: [
+              Text(
+                _attemptedToday
+                    ? "🎯 You’ve already attempted today’s ranked quiz!"
+                    : "⚡ You haven’t taken today’s ranked quiz yet.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (_attemptedToday) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LeaderboardScreen(),
+                        ),
+                      );
+                    } else {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => const DailyRankedQuizEntry(),
                         ),
                       );
-                    },
-                    child: _ctaItem("Today's Rank", "Take Quiz →", accent),
-                  )
-                : _statItem("Today's Rank", "#$todayRank", textColor),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (todayRank != null)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                    }
+                  },
+                  icon: Icon(
+                    _attemptedToday
+                        ? Icons.leaderboard_rounded
+                        : Icons.flash_on_rounded,
+                    size: 20,
+                  ),
+                  label: Text(
+                    _attemptedToday ? "View Leaderboard" : "Take Today’s Quiz",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 2,
+                  ),
+                ),
               ),
-              icon: const Icon(Icons.leaderboard_rounded, size: 18),
-              label: const Text("View Leaderboard"),
-              style: TextButton.styleFrom(
-                foregroundColor: accent,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              ),
-            ),
+            ],
           ),
+        ),
       ],
     );
   }
 
-  // --- New Offline Practice Stats Section ---
-  Widget _buildOfflineStats(
-    BuildContext context,
-    Color textColor,
+  // --- Offline-only section for unauthenticated users ---
+  Widget _buildOfflineOnlyStats(
     Color accent,
+    Color textColor,
+    BuildContext context,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Offline Practice Summary",
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _statItem("Sessions", "$offlineSessions", textColor),
-            _statItem("Correct", "$offlineCorrect", textColor),
-            _statItem("Wrong", "$offlineIncorrect", textColor),
-            _statItem(
-              "Avg Time",
-              "${offlineAvgTime.toStringAsFixed(1)}s",
-              textColor,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            "🔒 Sign in & take the Daily Ranked Quiz to unlock global stats like ranks and leaderboard!",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: textColor.withOpacity(0.85),
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.login_rounded, size: 18),
+                  label: const Text("Login to Compete"),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: accent, width: 1.3),
+                    foregroundColor: accent,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            DailyRankedQuizEntry(), // 👈 offline practice entry
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.school_rounded, size: 18),
+                  label: const Text("Practice Now"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  // --- Helper UI Components (unchanged) ---
-  Widget _statItem(String title, String value, Color color) {
+  // --- Mini Stat Widget ---
+  Widget _miniStat(IconData icon, String title, String value, Color accent) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Icon(icon, color: accent, size: 24),
+        const SizedBox(height: 4),
         Text(
           value,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: color,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: TextStyle(color: color.withOpacity(0.7), fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _ctaItem(String title, String label, Color accent) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontSize: 15,
             color: accent,
-            fontSize: 14,
           ),
         ),
-        const SizedBox(height: 4),
         Text(
           title,
           style: TextStyle(color: accent.withOpacity(0.7), fontSize: 12),
         ),
       ],
-    );
-  }
-
-  Widget _buildLoginPrompt(
-    BuildContext context,
-    Color accent,
-    Color textColor,
-  ) {
-    return Center(
-      child: Column(
-        children: [
-          Icon(Icons.lock_outline_rounded, color: accent, size: 40),
-          const SizedBox(height: 10),
-          Text(
-            "Login to view your global rank & performance stats",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: textColor.withOpacity(0.85),
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            },
-            icon: const Icon(Icons.login_rounded, size: 18),
-            label: const Text(
-              "Sign in to Continue",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: accent, width: 1.5),
-              foregroundColor: accent,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
