@@ -4,23 +4,18 @@ import '../../../../app.dart';
 import '../../../performance/presentation/providers/performance_provider.dart';
 import '../../../practice/presentation/providers/practice_log_provider.dart';
 import '../../../../presentation/theme/app_theme.dart';
-
-// 🧩 Widgets
+import '../widgets/practice_bar_section.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/quick_stats.dart';
 import '../widgets/heatmap_section.dart';
-import '../widgets/home_card.dart';
-import '../widgets/smart_practice_section.dart';
-import '../widgets/master_basics_section.dart';
-import '../widgets/quick_stats.dart';
-import '../widgets/heatmap_section.dart';
+
 // 📊 Feature Screens
 import '../../../performance/presentation/screens/performance_screen.dart';
-import '../../../quiz/presentation/screens/setup/mixed_quiz_setup_screen.dart';
 import '../../../practice/presentation/screens/attempts_history_screen.dart';
-import '../../../quiz/presentation/screens/leaderboard_screen.dart'; // optional if not created yet
+import '../../../learn_daily/learn_daily_screen.dart';
+import '../../../tips/presentation/screens/tips_home_screen.dart';
 
-/// 🏠 Home Screen — Enhanced UX Dashboard for SpeedMath Pro
+/// 🏠 Home Screen — Uniform Modern Dashboard
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -29,9 +24,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
-  final double cellSize = 12;
-  final double cellSpacing = 4;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -103,58 +95,59 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               children: [
                 const SizedBox(height: 8),
 
-                // 👋 Welcome Section
                 _buildWelcomeSection(context),
-
                 const SizedBox(height: 16),
 
-                // ⚡ Quick Stats
                 QuickStatsSection(
                   isDarkMode: theme.brightness == Brightness.dark,
                 ),
 
                 const SizedBox(height: 20),
+                const PracticeBarSection(),
+                const SizedBox(height: 24),
 
-                // 🔥 Activity Heatmap
-                HeatmapSection(
-                  isDarkMode: theme.brightness == Brightness.dark,
-                  activity: activity,
-                  colorForValue: _colorForValue,
-                ),
-
-                const SizedBox(height: 28),
-
-                // 🏆 Leaderboard Banner
-                _buildLeaderboardBanner(context),
-
-                const SizedBox(height: 28),
-
-                // 📘 Today’s Trick Card
-                _buildTodayTrickCard(theme),
-
-                const SizedBox(height: 28),
-
-                // 📈 Featured Actions
-                _buildSectionHeader("Explore"),
-                const SizedBox(height: 8),
-
-                HomeCard(
-                  title: "Performance Insights",
-                  subtitle: "Track your accuracy & speed trends",
-                  icon: Icons.trending_up_rounded,
+                _buildFeatureCard(
+                  context,
+                  title: "Learn Daily",
+                  subtitle: "A new math concept to explore every day 🔥",
+                  icon: Icons.menu_book_rounded,
+                  gradientColors: [
+                    theme.colorScheme.primary.withOpacity(0.15),
+                    theme.colorScheme.primary.withOpacity(0.05),
+                  ],
+                  iconColor: Colors.blueAccent,
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const PerformanceScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const LearnDailyScreen()),
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                HomeCard(
+                const SizedBox(height: 20),
+
+                _buildFeatureCard(
+                  context,
+                  title: "Tips & Tricks",
+                  subtitle: "Quick math hacks to improve efficiency ⚡",
+                  icon: Icons.lightbulb_rounded,
+                  gradientColors: [
+                    Colors.orangeAccent.withOpacity(0.15),
+                    Colors.orangeAccent.withOpacity(0.05),
+                  ],
+                  iconColor: Colors.orangeAccent,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TipsHomeScreen()),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                _buildWideInfoCard(
+                  context,
                   title: "Practice History",
                   subtitle: "Review your past quizzes & progress",
                   icon: Icons.history_rounded,
+                  accentColor: Colors.teal,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -162,35 +155,34 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                HomeCard(
-                  title: "Mixed Practice",
-                  subtitle: "Build custom quizzes by topic & level",
-                  icon: Icons.auto_awesome_rounded,
+                const SizedBox(height: 20),
+
+                _buildWideInfoCard(
+                  context,
+                  title: "Performance Insights",
+                  subtitle: "Track your accuracy & speed trends over time",
+                  icon: Icons.trending_up_rounded,
+                  accentColor: Colors.purpleAccent,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const MixedQuizSetupScreen(),
+                      builder: (_) => const PerformanceScreen(),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 28),
 
-                // 🧠 Smart Practice Section
-                _buildSectionHeader("Smart Practice"),
+                _buildSectionHeader("Your Activity"),
                 const SizedBox(height: 8),
-                const SmartPracticeSection(),
+                HeatmapSection(
+                  isDarkMode: theme.brightness == Brightness.dark,
+                  activity: activity,
+                  colorForValue: _colorForValue,
+                ),
 
-                const SizedBox(height: 28),
-
-                // 🧮 Master Basics Section
-                _buildSectionHeader("Master the Basics"),
-                const SizedBox(height: 8),
-                const MasterBasicsSection(),
-
-                const SizedBox(height: 32),
+                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -199,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     );
   }
 
-  /// 👋 Personalized Welcome Header
+  /// 👋 Welcome Header
   Widget _buildWelcomeSection(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
@@ -214,50 +206,148 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         ),
         const SizedBox(height: 4),
         Text(
-          "Ready to sharpen your math reflexes today?",
+          "Let’s boost your math speed today!",
           style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
         ),
       ],
     );
   }
 
-  /// 🏆 Leaderboard Motivation Banner
-  Widget _buildLeaderboardBanner(BuildContext context) {
-    return InkWell(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-      ),
+  /// 🌈 Reusable Feature Card (for Learn Daily, Tips)
+  Widget _buildFeatureCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
-            colors: [Colors.amber.shade600, Colors.orange.shade400],
+            colors: gradientColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: gradientColors.first.withOpacity(0.2),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors.first.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const Icon(
-              Icons.emoji_events_rounded,
-              color: Colors.white,
-              size: 32,
+            Container(
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Icon(icon, size: 28, color: iconColor),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                "You're #12 today! 🔥 Beat #11 with 5 more correct answers!",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 📈 Reusable Wide Info Card (for Practice History, Performance)
+  Widget _buildWideInfoCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color accentColor,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.cardColor.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+          border: Border.all(color: accentColor.withOpacity(0.15), width: 1.2),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Icon(icon, size: 26, color: accentColor),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
+                    ),
+                  ),
+                ],
               ),
             ),
             const Icon(
               Icons.arrow_forward_ios_rounded,
-              color: Colors.white,
               size: 18,
+              color: Colors.grey,
             ),
           ],
         ),
@@ -265,39 +355,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     );
   }
 
-  /// 💡 Today’s Trick Mini Card
-  Widget _buildTodayTrickCard(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-            color: Colors.black.withOpacity(0.05),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          const Icon(Icons.lightbulb_rounded, color: Colors.amber, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              "💡 Trick of the Day: To multiply by 11, add the digits and place in between!",
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 🧭 Section Header Widget
+  /// 🧭 Section Header
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
@@ -305,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     );
   }
 
-  /// 🔄 Merge Offline (Hive) + Online (Firebase) Activity
+  /// 🔄 Merge Offline + Online Activity
   Map<DateTime, int> _mergeActivityMaps(
     Map<DateTime, int> offline,
     List<DateTime> ranked,

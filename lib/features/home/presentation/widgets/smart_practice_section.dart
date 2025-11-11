@@ -3,7 +3,7 @@ import '../../../../presentation/theme/app_theme.dart';
 import '../../../quiz/presentation/screens/setup/mixed_quiz_setup_screen.dart';
 import '../../../quiz/presentation/screens/daily_ranked_quiz_entry.dart';
 import '../../../performance/presentation/screens/performance_screen.dart';
-import '../../../tips/presentation/screens/tips_and_tricks_screen.dart';
+import '../../../tips/presentation/screens/tips_home_screen.dart';
 
 /// 🧠 Smart Practice Section — Displays Daily Ranked, Mixed Practice, Performance & Tips.
 class SmartPracticeSection extends StatelessWidget {
@@ -114,7 +114,7 @@ class SmartPracticeSection extends StatelessWidget {
           case 'Tips & Tricks':
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const TipsAndTricksScreen()),
+              MaterialPageRoute(builder: (_) => const TipsHomeScreen()),
             );
             break;
         }
