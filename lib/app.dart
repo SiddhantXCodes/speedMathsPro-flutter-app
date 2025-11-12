@@ -1,14 +1,14 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'presentation/providers/theme_provider.dart';
-import './features/performance/presentation/providers/performance_provider.dart';
-import './features/practice/presentation/providers/practice_log_provider.dart';
-import 'presentation/theme/app_theme.dart';
-import 'features/home/presentation/screens/home_screen.dart'; // ✅ moved home to features
-import './core/sync/sync_manager.dart'; // ✅ for future global sync
-import './core/firebase/firebase_options.dart'; // optional future use
-import 'features/auth/presentation/providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
+import 'features/performance/performance_provider.dart';
+import 'features/practice/practice_log_provider.dart';
+import 'theme/app_theme.dart';
+import 'features/home/screens/home_screen.dart'; // ✅ moved home to features
+import 'services/sync_manager.dart'; // ✅ for future global sync
+import 'services/firebase_options.dart'; // optional future use
+import 'features/auth/auth_provider.dart';
 
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();

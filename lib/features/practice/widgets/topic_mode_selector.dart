@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../presentation/theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
 /// 🧮 TopicModeSelector — lets users choose a sub-mode (Tips, Revision, Practice)
 /// Used in Smart Practice or Master Basics flow.

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../presentation/theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
 class LearnTableView extends StatefulWidget {
   final String topic;

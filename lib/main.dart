@@ -1,8 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'core/services/app_initializer.dart';
-import 'core/widgets/boot_screen.dart';
-import 'core/sync/sync_manager.dart'; // 🧩 Add this import
+import 'services/app_initializer.dart';
+import 'widgets/boot_screen.dart';
+import 'services/sync_manager.dart'; // 🧩 Add this import
 import 'app.dart';
 
 void main() async {

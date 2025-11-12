@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../../presentation/theme/app_theme.dart';
-import '../home/presentation/widgets/practice_bottom_sheet.dart';
+import '../../theme/app_theme.dart';
+import '../home/widgets/practice_bottom_sheet.dart';
 import 'learn_repository.dart';
 import 'learning_items.dart';
 import 'widgets/learn_table_view.dart';
