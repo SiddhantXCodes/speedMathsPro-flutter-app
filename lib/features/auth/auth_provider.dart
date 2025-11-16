@@ -1,13 +1,15 @@
 // lib/features/auth/auth_provider.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+
 import 'auth_repository.dart';
 import '../../providers/performance_provider.dart';
-import 'package:provider/provider.dart';
 
 /// 🧠 AuthProvider bridges UI and AuthRepository.
 class AuthProvider extends ChangeNotifier {
-  final AuthRepository _repo = AuthRepository();
+  late final AuthRepository _repo;
 
   User? _user;
   User? get user => _user;
@@ -18,11 +20,27 @@ class AuthProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
+  /// -------------------------------------------------------------
+  /// 🔥 NORMAL CONSTRUCTOR — used in real app
+  /// -------------------------------------------------------------
   AuthProvider() {
-    // 🔥 Listen to Firebase user changes in REAL-TIME
+    _repo = AuthRepository();
+
     _repo.userChanges.listen((firebaseUser) {
       _user = firebaseUser;
-      notifyListeners(); // keeps UI synced with login state
+      notifyListeners();
+    });
+  }
+
+  /// -------------------------------------------------------------
+  /// 🧪 TEST CONSTRUCTOR — used only inside Flutter tests
+  /// -------------------------------------------------------------
+  AuthProvider.test(FirebaseAuth mockAuth) {
+    _repo = AuthRepository.test(mockAuth);
+
+    _repo.userChanges.listen((firebaseUser) {
+      _user = firebaseUser;
+      notifyListeners();
     });
   }
 
@@ -37,8 +55,6 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       await _repo.signInWithEmail(email, password);
-
-      // 🔥 Sync performance after login
       await context.read<PerformanceProvider>().reloadAll();
     } on FirebaseAuthException catch (e) {
       _error = e.message;
@@ -59,8 +75,6 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       await _repo.registerWithEmail(name, email, password);
-
-      // 🔥 Load performance for newly created user
       await context.read<PerformanceProvider>().reloadAll();
     } on FirebaseAuthException catch (e) {
       _error = e.message;
@@ -76,8 +90,6 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       await _repo.signInWithGoogle();
-
-      // 🔥 Sync after login
       await context.read<PerformanceProvider>().reloadAll();
     } finally {
       _setLoading(false);
@@ -93,12 +105,8 @@ class AuthProvider extends ChangeNotifier {
   // 🚪 LOGOUT
   // --------------------------------------------------------------------------
   Future<void> logout(BuildContext context) async {
-    // 🔥 Reset local streak & all performance data FIRST
     context.read<PerformanceProvider>().resetAll();
-
-    // 🔥 Then sign out user
     await _repo.signOut();
-
     _user = null;
     notifyListeners();
   }

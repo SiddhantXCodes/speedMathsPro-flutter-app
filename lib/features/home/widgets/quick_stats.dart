@@ -13,6 +13,9 @@ import '../../performance/screens/performance_screen.dart';
 import '../../../services/hive_service.dart';
 import '../../../providers/performance_provider.dart';
 
+// Popup import ✔
+import '../../quiz/widgets/quiz_entry_popup.dart';
+
 // Prefix to avoid conflict with Firebase Auth
 import '../../auth/auth_provider.dart' as myauth;
 
@@ -132,7 +135,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
         return;
       }
 
-      // ONLINE daily leaderboard
+      // DAILY LEADERBOARD
       final firestore = FirebaseFirestore.instance;
       final todayKey = _dateKey(DateTime.now());
 
@@ -157,7 +160,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
         rank++;
       }
 
-      // ALL TIME
+      // ALL-TIME
       final allSnap = await firestore
           .collection('alltime_leaderboard')
           .doc(user.uid)
@@ -304,6 +307,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
     );
   }
 
+  // ⭐ RANKED SECTION (UPDATED WITH POPUP)
   Widget _buildRankedStats(Color accent) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -350,25 +354,22 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
 
           const SizedBox(height: 14),
 
-          // BUTTON — fully updated logic here
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () async {
                 final perf = context.read<PerformanceProvider>();
 
-                // Always refresh from Firebase
                 await perf.reloadAll();
+
                 final playedToday = _attemptedToday;
 
                 if (playedToday) {
-                  // already attempted → leaderboard only
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
                         "🔥 You've already attempted today's ranked quiz!",
                       ),
-                      duration: Duration(seconds: 2),
                     ),
                   );
 
@@ -379,17 +380,29 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
                     ),
                   );
                 } else {
-                  // same flow as streak
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DailyRankedQuizEntry(),
-                    ),
+                  // SHOW POPUP BEFORE STARTING QUIZ ✔
+                  showQuizEntryPopup(
+                    context: context,
+                    title: "Daily Ranked Quiz",
+                    infoLines: [
+                      "10 questions fixed for all users.",
+                      "Total time: 60 seconds.",
+                      "Only 1 attempt allowed.",
+                      "Leaderboard ranks depend on score & time.",
+                      "If unsure, try Practice first.",
+                    ],
+                    onStart: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DailyRankedQuizEntry(),
+                        ),
+                      ).then((_) async {
+                        await perf.reloadAll();
+                        if (mounted) _fetchStats();
+                      });
+                    },
                   );
-
-                  // refresh after quiz
-                  await perf.reloadAll();
-                  if (mounted) _fetchStats();
                 }
               },
               icon: Icon(

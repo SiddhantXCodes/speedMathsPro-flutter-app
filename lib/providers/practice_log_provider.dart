@@ -167,6 +167,11 @@ class PracticeLogProvider extends ChangeNotifier {
     }).toList();
   }
 
+  // Add at bottom of class
+  void testMarkInitialized() {
+    initialized = true;
+  }
+
   // --------------------------------------------------------------
   // 🧹 Clear all local practice logs
   // --------------------------------------------------------------

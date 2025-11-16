@@ -168,6 +168,11 @@ class PerformanceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Add at bottom of class
+  void testMarkInitialized() {
+    initialized = true;
+  }
+
   // --------------------------------------------------------------------------
   // Utils
   // --------------------------------------------------------------------------
