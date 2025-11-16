@@ -45,16 +45,6 @@ class PracticeBarSection extends StatelessWidget {
                   color: textColor,
                 ),
               ),
-              TextButton.icon(
-                onPressed: () {
-                  // Optional: link to dedicated practice page
-                },
-                icon: Icon(Icons.bolt_rounded, color: accent, size: 20),
-                label: Text(
-                  "Smart Practice",
-                  style: TextStyle(color: accent, fontWeight: FontWeight.w600),
-                ),
-              ),
             ],
           ),
 

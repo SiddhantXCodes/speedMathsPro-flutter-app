@@ -65,11 +65,8 @@ class TopBar extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(width: 8),
-
         // 🔥 Daily Streak Widget (separated)
-        const DailyStreakWidget(),
-
+        // const DailyStreakWidget(),
         const SizedBox(width: 12),
 
         // 👤 User Avatar

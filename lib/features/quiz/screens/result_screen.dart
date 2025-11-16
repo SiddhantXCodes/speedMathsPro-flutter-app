@@ -1,13 +1,13 @@
 // lib/features/quiz/screens/result_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'quiz_screen.dart';
 import '../../../theme/app_theme.dart';
 import '../usecase/generate_questions.dart';
-import 'leaderboard_screen.dart';
+import '../../performance/screens/performance_screen.dart';
 import '../../home/screens/home_screen.dart';
-import '../../practice/screens/attempts_history_screen.dart';
-import 'quiz_screen.dart';
+import 'leaderboard_screen.dart';
 import '../../../providers/performance_provider.dart';
 
 class ResultScreen extends StatelessWidget {
@@ -40,81 +40,95 @@ class ResultScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = AppTheme.adaptiveAccent(context);
     final textColor = AppTheme.adaptiveText(context);
-    final theme = Theme.of(context);
 
-    // ⭐ For ranked → ONLY refresh from Firebase (no local streak update)
+    // Ranked → refresh Firebase streak only
     if (isRanked) {
       Future.microtask(() {
         final perf = Provider.of<PerformanceProvider>(context, listen: false);
-        perf.reloadAll(); // Firebase updates streak & today's status
+        perf.reloadAll();
       });
     }
 
-    // Format timer
     final mins = (timeTakenSeconds ~/ 60).toString().padLeft(2, '0');
     final secs = (timeTakenSeconds % 60).toString().padLeft(2, '0');
 
-    // Data used by Full Review screen
-    final attemptData = {
-      'topic': title,
-      'category': isRanked ? 'Ranked' : 'Practice',
-      'date': DateTime.now(),
-      'correct': correct,
-      'incorrect': incorrect,
-      'total': total,
-      'score': score,
-      'timeSpentSeconds': timeTakenSeconds,
-      'questions': questions,
-      'userAnswers': userAnswers,
-    };
-
     return WillPopScope(
-      onWillPop: () async => false,
+      onWillPop: () async {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+        return false;
+      },
       child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+
         appBar: AppBar(
-          title: Text(isRanked ? "Ranked Result" : "Quiz Result"),
           backgroundColor: accent,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back_rounded,
+              color: AppTheme.adaptiveText(context),
+            ),
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+                (route) => false,
+              );
+            },
+          ),
+          title: Text(
+            isRanked ? "Ranked Result" : "Quiz Result",
+            style: TextStyle(
+              color: AppTheme.adaptiveText(context),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           centerTitle: true,
-          automaticallyImplyLeading: false,
         ),
+
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // 🏆 Score Card
+              // ⭐ Score Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
                   children: [
                     Icon(
                       Icons.emoji_events_rounded,
                       color: isRanked ? Colors.amber : accent,
-                      size: 48,
+                      size: 40,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       "Your Score",
                       style: TextStyle(
                         color: textColor.withOpacity(0.7),
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     Text(
                       "$score",
                       style: TextStyle(
-                        fontSize: 36,
+                        fontSize: 30,
                         fontWeight: FontWeight.bold,
                         color: accent,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       "Correct: $correct | Incorrect: $incorrect",
                       style: TextStyle(
@@ -131,11 +145,12 @@ class ResultScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
-              // 🔘 Buttons
+              // 🔘 Buttons Row
               Row(
                 children: [
+                  // HOME BUTTON
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
@@ -193,34 +208,27 @@ class ResultScreen extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
-              // 🧠 Full Review Button
+              // 📊 Performance Page Button
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
+                child: OutlinedButton.icon(
                   onPressed: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            AttemptReviewScreen(attempt: attemptData),
+                        builder: (_) => const PerformanceScreen(),
                       ),
                     );
                   },
-                  icon: const Icon(
-                    Icons.visibility_rounded,
-                    color: Colors.white,
-                  ),
+                  icon: const Icon(Icons.insights_rounded),
                   label: const Text(
-                    "Full Review",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    "Performance Page",
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: accent, width: 1.4),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -229,12 +237,7 @@ class ResultScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 16),
-              Divider(
-                height: 30,
-                thickness: 1,
-                color: textColor.withOpacity(0.2),
-              ),
+              const SizedBox(height: 10),
 
               Align(
                 alignment: Alignment.centerLeft,
@@ -247,9 +250,9 @@ class ResultScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
 
-              // 📄 List of Q/A
+              // 📄 Review List
               Expanded(
                 child: ListView.builder(
                   itemCount: questions.length,
@@ -261,10 +264,7 @@ class ResultScreen extends StatelessWidget {
                         userAns != null && userAns.trim() == correctAns;
 
                     return Container(
-                      margin: const EdgeInsets.symmetric(
-                        vertical: 6,
-                        horizontal: 2,
-                      ),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: isCorrect
