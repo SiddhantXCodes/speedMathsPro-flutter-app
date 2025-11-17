@@ -27,19 +27,21 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
 
   final Set<String> selectedTopics = {};
 
-  // Min / Max input
+  // Range
   final TextEditingController minCtrl = TextEditingController(text: "1");
   final TextEditingController maxCtrl = TextEditingController(text: "50");
 
   // Timer
   bool useTimer = true;
-  int timerMinutes = 2; // default 2 min
+  int timerMinutes = 2;
+
+  // Default number of questions
+  final int defaultCount = 20;
 
   @override
   Widget build(BuildContext context) {
     final accent = AppTheme.adaptiveAccent(context);
     final textColor = AppTheme.adaptiveText(context);
-    final cardColor = AppTheme.adaptiveCard(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -49,7 +51,7 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // TOPICS
+          // -------------------- TOPIC SELECT --------------------
           Text(
             "Select Topics",
             style: TextStyle(
@@ -77,7 +79,7 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
                     }
                   });
                 },
-                selectedColor: accent.withOpacity(0.2),
+                selectedColor: accent.withOpacity(0.23),
                 labelStyle: TextStyle(
                   color: selected ? accent : textColor,
                   fontWeight: selected ? FontWeight.bold : FontWeight.normal,
@@ -88,7 +90,7 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
 
           const SizedBox(height: 24),
 
-          // RANGE INPUT
+          // -------------------- RANGE INPUT --------------------
           Text(
             "Number Range",
             style: TextStyle(
@@ -97,7 +99,6 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 12),
 
           Row(
@@ -124,13 +125,14 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
 
           const SizedBox(height: 24),
 
-          // TIMER
+          // -------------------- TIMER --------------------
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("Use Timer?", style: TextStyle(color: textColor)),
               Switch(
                 value: useTimer,
+                activeColor: accent,
                 onChanged: (v) => setState(() => useTimer = v),
               ),
             ],
@@ -153,16 +155,29 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
 
           const SizedBox(height: 40),
 
-          // START BUTTON
+          // -------------------- START BUTTON --------------------
           ElevatedButton.icon(
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text(
+              "Start Practice",
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accent,
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             onPressed: selectedTopics.isEmpty
                 ? null
                 : () {
                     final min = int.tryParse(minCtrl.text) ?? 1;
                     final max = int.tryParse(maxCtrl.text) ?? 50;
-                    final seconds = useTimer
-                        ? timerMinutes * 60
-                        : 150; // fallback
+
+                    final timeSeconds = useTimer
+                        ? (timerMinutes * 60)
+                        : 0; // 0 = unlimited
 
                     Navigator.push(
                       context,
@@ -171,25 +186,14 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
                           title: "Mixed Practice",
                           min: min,
                           max: max,
-                          count: 0,
-                          mode: QuizMode.practice,
-                          timeLimitSeconds: seconds,
-
-                          // ✅ IMPORTANT: Pass topic list to quiz
+                          count: defaultCount,
                           topics: selectedTopics.toList(),
+                          mode: QuizMode.challenge, // ⭐ Correct mode
+                          timeLimitSeconds: timeSeconds,
                         ),
                       ),
                     );
                   },
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text("Start Practice"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accent,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
           ),
         ],
       ),
@@ -197,6 +201,7 @@ class _MixedQuizSetupScreenState extends State<MixedQuizSetupScreen> {
   }
 }
 
+// -------------------- DECORATION --------------------
 InputDecoration _inputDecoration(
   BuildContext context,
   String label,

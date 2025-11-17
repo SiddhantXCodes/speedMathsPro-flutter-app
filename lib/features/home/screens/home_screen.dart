@@ -12,7 +12,7 @@ import '../widgets/practice_bar_section.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/quick_stats.dart';
 import '../widgets/heatmap_section.dart';
-
+import '../widgets/master_basics_section.dart';
 import '../../../features/auth/auth_provider.dart';
 import '../../performance/screens/performance_screen.dart';
 import '../../practice/screens/attempts_history_screen.dart';
@@ -172,8 +172,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
         _sliverFeatureCard(
           context,
-          title: "Learn Daily",
-          subtitle: "A new math concept every day 🔥",
+          title: "Revise Daily",
+          subtitle: "Do it daily to boast speed by +40% 🚀",
           icon: Icons.menu_book_rounded,
           iconColor: Colors.blueAccent,
           gradient1: theme.colorScheme.primary.withOpacity(0.15),
@@ -189,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         _sliverFeatureCard(
           context,
           title: "Tips & Tricks",
-          subtitle: "Quick math hacks ⚡",
+          subtitle: "Quick speedMaths hacks ⚡",
           icon: Icons.lightbulb_rounded,
           iconColor: Colors.orangeAccent,
           gradient1: Colors.orangeAccent.withOpacity(0.15),
@@ -201,7 +201,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             );
           },
         ),
-
+        // ⭐ NEW — Separate Master Basics Card
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          sliver: const SliverToBoxAdapter(child: MasterBasicsSection()),
+        ),
         _sliverWideCard(
           context,
           title: "Practice History",

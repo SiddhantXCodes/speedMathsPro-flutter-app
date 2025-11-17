@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-
+import 'practice_overview_screen.dart';
 import '../usecase/generate_questions.dart';
 import '../../../theme/app_theme.dart';
 
@@ -287,18 +287,46 @@ class _QuizScreenState extends State<QuizScreen> {
         await repo.savePracticeScore(score, timeSpent);
     }
 
+    // if (!mounted) return;
+
+    // Navigator.pushReplacement(
+    //   context,
+    //   MaterialPageRoute(
+    //     builder: (_) => ResultScreen(
+    //       score: score,
+    //       timeTakenSeconds: timeSpent,
+    //       mode: widget.mode,
+    //     ),
+    //   ),
+    // );
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(
-          score: score,
-          timeTakenSeconds: timeSpent,
-          mode: widget.mode,
+    if (widget.mode == QuizMode.dailyRanked ||
+        widget.mode == QuizMode.timedRanked) {
+      // keep existing behaviour for ranked
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResultScreen(
+            score: score,
+            timeTakenSeconds: timeSpent,
+            mode: widget.mode,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // For offline practice / mixed -> navigate to PracticeOverviewScreen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PracticeOverviewScreen(
+            mode: widget.mode == QuizMode.challenge
+                ? PracticeMode.mixedPractice
+                : PracticeMode.dailyPractice,
+          ),
+        ),
+      );
+    }
   }
 
   // ----------------------------------------------------------------------

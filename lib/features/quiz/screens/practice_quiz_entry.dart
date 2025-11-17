@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'quiz_screen.dart';
-import '../../home/screens/home_screen.dart';
 
 class PracticeQuizEntry extends StatelessWidget {
   const PracticeQuizEntry({super.key});
@@ -20,7 +19,7 @@ class PracticeQuizEntry extends StatelessWidget {
             max: 50,
             count: 10,
             mode: QuizMode.practice,
-            timeLimitSeconds: 150,
+            timeLimitSeconds: 20,
           ),
         ),
       );

@@ -1,4 +1,4 @@
-//lib/services/hive_service.dart
+// lib/services/hive_service.dart
 
 import 'package:hive/hive.dart';
 import 'hive_boxes.dart';
@@ -22,10 +22,10 @@ class HiveService {
   }
 
   // ===========================================================================
-  // ⭐⭐ NEW QUIZ SYSTEM — SEPARATE SCORE BOXES
+  // ⭐⭐ NEW QUIZ SYSTEM — STRICTLY SEPARATED SCORE BOXES
   // ===========================================================================
 
-  /// 🟦 Practice Quiz
+  /// 🟦 Practice (practice_scores)
   static Future<void> savePracticeScore(DailyScore score) async {
     final box = await _safeBox<DailyScore>('practice_scores');
     await box.add(score);
@@ -38,7 +38,7 @@ class HiveService {
     ).values.toList().reversed.toList();
   }
 
-  /// 🟥 Ranked Quiz
+  /// 🟥 Ranked (ranked_scores)
   static Future<void> saveRankedScore(DailyScore score) async {
     final box = await _safeBox<DailyScore>('ranked_scores');
     await box.add(score);
@@ -51,7 +51,7 @@ class HiveService {
     ).values.toList().reversed.toList();
   }
 
-  /// 🟨 Mixed Practice Quiz
+  /// 🟨 Mixed / Challenge (mixed_scores)
   static Future<void> saveMixedScore(DailyScore score) async {
     final box = await _safeBox<DailyScore>('mixed_scores');
     await box.add(score);
@@ -65,7 +65,7 @@ class HiveService {
   }
 
   // ===========================================================================
-  // OLD SYSTEM (DailyScore)
+  // OLD SYSTEM — still needed for heatmap + performance
   // ===========================================================================
 
   static Future<void> addDailyScore(DailyScore score) async {
@@ -84,7 +84,7 @@ class HiveService {
   }
 
   // ===========================================================================
-  // PRACTICE LOG (Old feature)
+  // PRACTICE LOGS (OLD FEATURE)
   // ===========================================================================
   static Future<void> addPracticeLog(PracticeLog log) async {
     final box = HiveBoxes.practiceLogBox;
@@ -163,7 +163,7 @@ class HiveService {
   }
 
   // ===========================================================================
-  // ACTIVITY MAP
+  // ACTIVITY MAP — for heatmap
   // ===========================================================================
   static Future<void> _incrementActivityForDate(DateTime d, int by) async {
     final box = await _safeBox<Map>('activity_data');
@@ -241,7 +241,6 @@ class HiveService {
 
   static Future<void> clearPendingSyncsOfType(String type) async {
     final box = await _safeBox<Map>('sync_queue');
-
     final toDelete = box.keys.where((k) {
       final item = box.get(k);
       return item != null && item['type'] == type;
@@ -258,7 +257,7 @@ class HiveService {
   }
 
   // ===========================================================================
-  // CLEAR EVERYTHING
+  // CLEAR EVERYTHING (for logout)
   // ===========================================================================
   static Future<void> clearAllOfflineData() async {
     await HiveBoxes.practiceLogBox.clear();

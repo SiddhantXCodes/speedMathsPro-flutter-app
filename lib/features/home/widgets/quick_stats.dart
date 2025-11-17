@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-
 import '../../../theme/app_theme.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../quiz/screens/daily_ranked_quiz_entry.dart';
@@ -41,10 +40,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
   DateTime _lastFetch = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool _shouldFetch() {
-    final diff = DateTime.now().difference(_lastFetch).inMilliseconds;
-    if (diff < 350) return false;
-    _lastFetch = DateTime.now();
-    return true;
+    return DateTime.now().difference(_lastFetch).inMilliseconds > 350;
   }
 
   @override
@@ -80,23 +76,25 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
     }
   }
 
-  String _dateKey(DateTime d) =>
-      "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-
   // ------------------------------------------------------------
   // MAIN FETCH
   // ------------------------------------------------------------
   Future<void> _fetchStats() async {
     if (!mounted || _isFetching) return;
     _isFetching = true;
+    _lastFetch = DateTime.now();
 
     setState(() => _loading = true);
 
     try {
-      // --------------------------------------------------
-      // OFFLINE DATA → From DailyScore hive entries
-      // --------------------------------------------------
-      final allScores = HiveService.getAllDailyScores();
+      // ------------------------------------------------------------------
+      // FIXED: Use NEW SEPARATED SCORE BOXES
+      // ------------------------------------------------------------------
+      final allScores = [
+        ...HiveService.getPracticeScores(),
+        ...HiveService.getRankedScores(),
+        ...HiveService.getMixedScores(),
+      ];
 
       offlineSessions = allScores.length;
 
@@ -107,12 +105,12 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
       final now = DateTime.now();
 
       for (final s in allScores) {
-        // Best Offline Score (practice or ranked)
-        bestOfflineScore = (s.score > bestOfflineScore)
+        // best score
+        bestOfflineScore = s.score > bestOfflineScore
             ? s.score
             : bestOfflineScore;
 
-        // Weekly average (last 7 days)
+        // weekly average
         final d = DateTime(s.date.year, s.date.month, s.date.day);
         if (now.difference(d).inDays <= 6) {
           sum += s.score;
@@ -120,7 +118,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
         }
       }
 
-      weeklyAverage = (count > 0) ? (sum / count).round() : 0;
+      weeklyAverage = count > 0 ? (sum / count).round() : 0;
 
       final user = FirebaseAuth.instance.currentUser;
 
@@ -139,13 +137,14 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
       }
 
       // --------------------------------------------------
-      // FETCH RANKED DATA (from PerformanceProvider)
+      // FETCH RANKED DATA
       // --------------------------------------------------
       final perf = context.read<PerformanceProvider>();
 
       todayRank = perf.todayRank;
       allTimeRank = perf.allTimeRank;
       bestRankedScore = perf.bestScore;
+
       attemptedToday = perf.dailyScores.containsKey(
         DateTime(now.year, now.month, now.day),
       );
@@ -357,7 +356,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
   }
 
   // ------------------------------------------------------------
-  // GUEST
+  // GUEST CTA
   // ------------------------------------------------------------
   Widget _guestCTA(Color accent, Color textColor) {
     return Container(
@@ -369,7 +368,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
       child: Column(
         children: [
           Text(
-            "🔥 Take the Daily Ranked Quiz to compete globally!",
+            "🔥 Take the Daily Ranked Quiz to get your global ranking and leaderboard!",
             textAlign: TextAlign.center,
             style: TextStyle(
               color: textColor.withOpacity(0.85),
@@ -402,7 +401,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
   }
 
   // ------------------------------------------------------------
-  // MINI STAT WIDGET
+  // MINI STAT
   // ------------------------------------------------------------
   Widget _miniStat(IconData icon, String title, String value, Color accent) {
     return Column(

@@ -8,7 +8,7 @@ class PerformanceProvider extends ChangeNotifier {
   late final PerformanceRepository _repository;
 
   // --------------------------------------------------------------------------
-  // 🔥 NORMAL CONSTRUCTOR (Production)
+  // NORMAL CONSTRUCTOR
   // --------------------------------------------------------------------------
   PerformanceProvider() {
     _repository = PerformanceRepository();
@@ -16,7 +16,7 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // 🧪 TEST CONSTRUCTOR (Injected Mock PerformanceRepository)
+  // TEST CONSTRUCTOR
   // --------------------------------------------------------------------------
   PerformanceProvider.test(PerformanceRepository mockRepo) {
     _repository = mockRepo;
@@ -25,9 +25,9 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // State
+  // STATE
   // --------------------------------------------------------------------------
-  Map<DateTime, int> _dailyScores = {}; // date → score
+  Map<DateTime, int> _dailyScores = {}; // ranked trend only (date → score)
   Map<String, dynamic>? _leaderboardData;
 
   bool initialized = false;
@@ -39,43 +39,44 @@ class PerformanceProvider extends ChangeNotifier {
   int? _bestScore;
 
   // --------------------------------------------------------------------------
-  // Getters
+  // GETTERS
   // --------------------------------------------------------------------------
   Map<DateTime, int> get dailyScores => _dailyScores;
+
   Map<String, dynamic>? get leaderboardData => _leaderboardData;
 
   bool get isLoadingLeaderboard => _isLoadingLeaderboard;
   bool get loading => !initialized;
 
-  int get currentStreak => _currentStreak; // Ranked only
+  int get currentStreak => _currentStreak;
+
   int? get todayRank => _todayRank;
   int? get allTimeRank => _allTimeRank;
   int? get bestScore => _bestScore;
 
-  // Weekly average of scores
+  /// Weekly average from ranked_scores only
   int get weeklyAverage {
     if (_dailyScores.isEmpty) return 0;
 
     final now = DateTime.now();
 
-    final last7days = List.generate(7, (index) {
-      final d = now.subtract(Duration(days: index));
+    final recent = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: i));
       return DateTime(d.year, d.month, d.day);
     });
 
-    final used = last7days
+    final used = recent
         .map((d) => _dailyScores[d] ?? 0)
-        .where((score) => score > 0)
+        .where((s) => s > 0)
         .toList();
 
     if (used.isEmpty) return 0;
 
-    final avg = used.reduce((a, b) => a + b) / used.length;
-    return avg.round();
+    return (used.reduce((a, b) => a + b) / used.length).round();
   }
 
   // --------------------------------------------------------------------------
-  // Initialization
+  // INIT
   // --------------------------------------------------------------------------
   Future<void> _init() async {
     await reloadAll();
@@ -84,17 +85,24 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // Load local daily scores only (offline practice + ranked cache)
+  // LOCAL RANKED SCORES — NEW SYSTEM
   // --------------------------------------------------------------------------
   Future<void> loadFromLocal({bool force = false}) async {
     try {
-      // Fetch new "score-only" trend data
-      final items = await _repository.fetchRankedQuizTrend();
+      // Read from new Hive box: ranked_scores
+      final ranked = HiveService.getRankedScores();
 
       _dailyScores = {
-        for (final e in items)
-          DateTime(e['date'].year, e['date'].month, e['date'].day): e['score'],
+        for (final e in ranked)
+          DateTime(e.date.year, e.date.month, e.date.day): e.score,
       };
+
+      // Best ranked score (local)
+      if (ranked.isEmpty) {
+        _bestScore = 0;
+      } else {
+        _bestScore = ranked.map((e) => e.score).reduce((a, b) => a > b ? a : b);
+      }
 
       notifyListeners();
     } catch (e) {
@@ -103,7 +111,7 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // Leaderboard summary from Firebase (today rank, best score, streak, etc.)
+  // LEADERBOARD HEADER — from Firebase
   // --------------------------------------------------------------------------
   Future<void> fetchLeaderboardHeader() async {
     if (_isLoadingLeaderboard) return;
@@ -116,7 +124,13 @@ class PerformanceProvider extends ChangeNotifier {
 
       _todayRank = _leaderboardData?['todayRank'];
       _allTimeRank = _leaderboardData?['allTimeRank'];
-      _bestScore = _leaderboardData?['bestScore'];
+
+      // Firebase bestScore overrides local best score if available
+      final fbBest = _leaderboardData?['bestScore'];
+      if (fbBest != null) {
+        _bestScore = fbBest;
+      }
+
       _currentStreak = _leaderboardData?['currentStreak'] ?? 0;
     } catch (e) {
       debugPrint("⚠️ Leaderboard fetch error: $e");
@@ -127,7 +141,7 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // Fetch list of online attempts (ranked attempts)
+  // ONLINE RANKED ATTEMPT HISTORY
   // --------------------------------------------------------------------------
   Future<List<Map<String, dynamic>>> fetchOnlineAttempts({
     int limit = 200,
@@ -140,11 +154,11 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // Reload both offline + online data
+  // RELOAD EVERYTHING
   // --------------------------------------------------------------------------
   Future<void> reloadAll() async {
     try {
-      await loadFromLocal(force: true);
+      await loadFromLocal();
       await fetchLeaderboardHeader();
       notifyListeners();
     } catch (e) {
@@ -153,7 +167,7 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // Reset (clear local)
+  // RESET
   // --------------------------------------------------------------------------
   Future<void> resetAll() async {
     _dailyScores.clear();
@@ -174,7 +188,7 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // ✔ TEST SUPPORT
+  // TEST SUPPORT
   // --------------------------------------------------------------------------
   void testMarkInitialized() {
     initialized = true;
