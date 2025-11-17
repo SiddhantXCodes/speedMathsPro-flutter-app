@@ -346,11 +346,30 @@ class PracticeOverviewScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _header("Date", textColor),
-                      _header("Time", textColor),
-                      _header(isDaily ? "Score" : "Result", textColor),
+                      Expanded(child: _header("Date", textColor)),
+                      Expanded(
+                        child: Text(
+                          "Time",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          isDaily ? "Score" : "Result",
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -400,10 +419,8 @@ class PracticeOverviewScreen extends StatelessWidget {
                               ),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                SizedBox(
-                                  width: 95,
+                                Expanded(
                                   child: Text(
                                     dateStr,
                                     style: TextStyle(
@@ -412,10 +429,10 @@ class PracticeOverviewScreen extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                SizedBox(
-                                  width: 85,
+                                Expanded(
                                   child: Text(
                                     timeStr,
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: textColor.withOpacity(0.7),
                                       fontSize: 13,

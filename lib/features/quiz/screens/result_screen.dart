@@ -27,21 +27,15 @@ class ResultScreen extends StatelessWidget {
   bool get isRanked =>
       mode == QuizMode.dailyRanked || mode == QuizMode.timedRanked;
 
-  // ----------------------------------------------------------
-  // LOAD HISTORY BASED ON QUIZ TYPE
-  // ----------------------------------------------------------
   List<DailyScore> _loadHistory() {
     switch (mode) {
       case QuizMode.practice:
         return HiveService.getPracticeScores();
-
       case QuizMode.dailyRanked:
       case QuizMode.timedRanked:
         return HiveService.getRankedScores();
-
       case QuizMode.challenge:
         return HiveService.getMixedScores();
-
       default:
         return HiveService.getPracticeScores();
     }
@@ -53,7 +47,6 @@ class ResultScreen extends StatelessWidget {
     final textColor = AppTheme.adaptiveText(context);
     final surface = AppTheme.adaptiveCard(context);
 
-    // Refresh performance only for ranked
     if (isRanked) {
       Future.microtask(() {
         Provider.of<PerformanceProvider>(context, listen: false).reloadAll();
@@ -63,7 +56,6 @@ class ResultScreen extends StatelessWidget {
     final mins = (timeTakenSeconds ~/ 60).toString().padLeft(2, '0');
     final secs = (timeTakenSeconds % 60).toString().padLeft(2, '0');
 
-    // Load filtered attempts
     final List<DailyScore> history = _loadHistory()
       ..sort((a, b) => b.date.compareTo(a.date));
 
@@ -79,7 +71,6 @@ class ResultScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
 
-        // --------------------------- APP BAR ---------------------------
         appBar: AppBar(
           backgroundColor: accent,
           leading: IconButton(
@@ -96,7 +87,6 @@ class ResultScreen extends StatelessWidget {
           centerTitle: true,
         ),
 
-        // --------------------------- BODY ---------------------------
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -206,7 +196,7 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 18),
 
               // ----------------------------------------------------
-              // 📊 PERFORMANCE SCREEN
+              // 📊 PERFORMANCE
               // ----------------------------------------------------
               SizedBox(
                 width: double.infinity,
@@ -250,7 +240,7 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 10),
 
               // ------------------------------------------------------------
-              // 📌 HEADER ROW (same as PracticeOverview)
+              // 📌 HEADER ROW (Aligned)
               // ------------------------------------------------------------
               if (history.isNotEmpty)
                 Container(
@@ -263,11 +253,39 @@ class ResultScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _header("Date", textColor),
-                      _header("Time", textColor),
-                      _header("Score", textColor),
+                      Expanded(
+                        child: Text(
+                          "Date",
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          "Time",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          "Score",
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -275,7 +293,7 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 8),
 
               // ------------------------------------------------------------
-              // 📌 ATTEMPTS LIST (same UI as PracticeOverview)
+              // 📌 ATTEMPTS LIST (Aligned)
               // ------------------------------------------------------------
               Expanded(
                 child: history.isEmpty
@@ -314,10 +332,8 @@ class ResultScreen extends StatelessWidget {
                               ),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                SizedBox(
-                                  width: 95,
+                                Expanded(
                                   child: Text(
                                     dateStr,
                                     style: TextStyle(
@@ -326,10 +342,10 @@ class ResultScreen extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                SizedBox(
-                                  width: 85,
+                                Expanded(
                                   child: Text(
                                     timeStr,
+                                    textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: textColor.withOpacity(0.7),
                                       fontSize: 13,
@@ -356,17 +372,6 @@ class ResultScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _header(String title, Color color) {
-    return Text(
-      title,
-      style: TextStyle(
-        color: color.withOpacity(0.8),
-        fontWeight: FontWeight.w600,
-        fontSize: 13,
       ),
     );
   }
