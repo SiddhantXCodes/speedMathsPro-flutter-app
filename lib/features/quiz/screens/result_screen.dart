@@ -1,6 +1,10 @@
+// lib/features/quiz/screens/result_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../theme/app_theme.dart';
 import '../../performance/screens/performance_screen.dart';
@@ -27,15 +31,41 @@ class ResultScreen extends StatelessWidget {
   bool get isRanked =>
       mode == QuizMode.dailyRanked || mode == QuizMode.timedRanked;
 
-  List<DailyScore> _loadHistory() {
+  // -------------------------------------------------------------
+  // 🔥 FETCH RANKED HISTORY FROM FIREBASE
+  // -------------------------------------------------------------
+  Future<List<DailyScore>> _loadRankedHistoryFromFirebase() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return [];
+
+    final snap = await FirebaseFirestore.instance
+        .collection("ranked_attempts")
+        .doc(user.uid)
+        .collection("attempts")
+        .orderBy("timestamp", descending: true)
+        .get();
+
+    return snap.docs.map((doc) {
+      final d = doc.data();
+      return DailyScore(
+        score: d["score"],
+        date: (d["timestamp"] as Timestamp).toDate(),
+      );
+    }).toList();
+  }
+
+  // -------------------------------------------------------------
+  // 🔥 LOAD HISTORY (Firebase for ranked, Hive for others)
+  // -------------------------------------------------------------
+  Future<List<DailyScore>> _loadHistory() async {
     switch (mode) {
       case QuizMode.practice:
         return HiveService.getPracticeScores();
-      case QuizMode.dailyRanked:
-      case QuizMode.timedRanked:
-        return HiveService.getRankedScores();
       case QuizMode.challenge:
         return HiveService.getMixedScores();
+      case QuizMode.dailyRanked:
+      case QuizMode.timedRanked:
+        return _loadRankedHistoryFromFirebase(); // 🔥 FIREBASE
       default:
         return HiveService.getPracticeScores();
     }
@@ -55,9 +85,6 @@ class ResultScreen extends StatelessWidget {
 
     final mins = (timeTakenSeconds ~/ 60).toString().padLeft(2, '0');
     final secs = (timeTakenSeconds % 60).toString().padLeft(2, '0');
-
-    final List<DailyScore> history = _loadHistory()
-      ..sort((a, b) => b.date.compareTo(a.date));
 
     return WillPopScope(
       onWillPop: () async {
@@ -196,7 +223,7 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 18),
 
               // ----------------------------------------------------
-              // 📊 PERFORMANCE
+              // 📊 PERFORMANCE PAGE
               // ----------------------------------------------------
               SizedBox(
                 width: double.infinity,
@@ -224,150 +251,169 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 22),
 
               // ------------------------------------------------------------
-              // 📌 Past Attempts Title
-              // ------------------------------------------------------------
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Past Attempts (${history.length})",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: textColor,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // ------------------------------------------------------------
-              // 📌 HEADER ROW (Aligned)
-              // ------------------------------------------------------------
-              if (history.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: surface.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          "Date",
-                          style: TextStyle(
-                            color: textColor.withOpacity(0.8),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          "Time",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: textColor.withOpacity(0.8),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          "Score",
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            color: textColor.withOpacity(0.8),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 8),
-
-              // ------------------------------------------------------------
-              // 📌 ATTEMPTS LIST (Aligned)
+              // 📌 PAST ATTEMPTS (FutureBuilder)
               // ------------------------------------------------------------
               Expanded(
-                child: history.isEmpty
-                    ? Center(
-                        child: Text(
-                          "No previous attempts",
-                          style: TextStyle(color: textColor.withOpacity(0.6)),
+                child: FutureBuilder<List<DailyScore>>(
+                  future: _loadHistory(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final history = snapshot.data!;
+
+                    return Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Past Attempts (${history.length})",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: textColor,
+                            ),
+                          ),
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: history.length,
-                        itemBuilder: (context, index) {
-                          final s = history[index];
-                          final isLast = index == 0;
+                        const SizedBox(height: 10),
 
-                          final dateStr = DateFormat(
-                            "MMM d, yy",
-                          ).format(s.date);
-                          final timeStr = DateFormat("h:mm a").format(s.date);
-
-                          return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 6),
+                        if (history.isNotEmpty)
+                          Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                              vertical: 8,
+                              horizontal: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: isLast
-                                  ? accent.withOpacity(0.08)
-                                  : surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isLast
-                                    ? accent.withOpacity(0.15)
-                                    : Colors.transparent,
-                              ),
+                              color: surface.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
                               children: [
                                 Expanded(
                                   child: Text(
-                                    dateStr,
+                                    "Date",
                                     style: TextStyle(
-                                      color: textColor,
+                                      color: textColor.withOpacity(0.8),
                                       fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    timeStr,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: textColor.withOpacity(0.7),
                                       fontSize: 13,
                                     ),
                                   ),
                                 ),
                                 Expanded(
                                   child: Text(
-                                    "${s.score}",
+                                    "Time",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: textColor.withOpacity(0.8),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    "Score",
                                     textAlign: TextAlign.right,
                                     style: TextStyle(
-                                      color: accent,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
+                                      color: textColor.withOpacity(0.8),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        },
-                      ),
+                          ),
+
+                        const SizedBox(height: 8),
+
+                        Expanded(
+                          child: history.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    "No previous attempts",
+                                    style: TextStyle(
+                                      color: textColor.withOpacity(0.6),
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: history.length,
+                                  itemBuilder: (context, index) {
+                                    final s = history[index];
+                                    final isLast = index == 0;
+
+                                    final dateStr = DateFormat(
+                                      "MMM d, yy",
+                                    ).format(s.date);
+                                    final timeStr = DateFormat(
+                                      "h:mm a",
+                                    ).format(s.date);
+
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isLast
+                                            ? accent.withOpacity(0.08)
+                                            : surface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isLast
+                                              ? accent.withOpacity(0.15)
+                                              : Colors.transparent,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              dateStr,
+                                              style: TextStyle(
+                                                color: textColor,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              timeStr,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: textColor.withOpacity(
+                                                  0.7,
+                                                ),
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              "${s.score}",
+                                              textAlign: TextAlign.right,
+                                              style: TextStyle(
+                                                color: accent,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ],
           ),

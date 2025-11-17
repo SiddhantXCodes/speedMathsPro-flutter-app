@@ -20,12 +20,13 @@ class ProfileScreen extends StatelessWidget {
     final textColor = AppTheme.adaptiveText(context);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        backgroundColor: accent,
         title: const Text("Profile & Settings"),
         centerTitle: true,
         elevation: 0,
       ),
-      backgroundColor: theme.scaffoldBackgroundColor,
 
       body: ListView(
         padding: const EdgeInsets.all(16),
