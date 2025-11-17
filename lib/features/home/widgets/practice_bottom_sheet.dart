@@ -11,7 +11,6 @@ import '../../../models/practice_mode.dart';
 import '../../quiz/screens/practice_overview_screen.dart';
 
 /// 🎯 Reusable bottom sheet for topic-mode practice setup
-/// Supports ONLY: min, max, and time limit (unlimited questions)
 Future<void> showPracticeBottomSheet(
   BuildContext context, {
   required String topic,
@@ -21,15 +20,18 @@ Future<void> showPracticeBottomSheet(
   final theme = Theme.of(context);
 
   // User inputs
-  final minCtrl = TextEditingController(text: '1');
-  final maxCtrl = TextEditingController(text: '50');
+  final minCtrl = TextEditingController(text: '5');
+  final maxCtrl = TextEditingController(text: '30');
+  final timeCtrl = TextEditingController(text: '60');
+  double timeLimit = 60;
 
-  double timeLimit = 60; // default 60 sec
-
-  // Fetch tips for that topic
+  // Fetch ONE random tip
   final allTips = tipsData[topic] ?? [];
-  final randomTips = List<String>.from(allTips)..shuffle();
-  final shownTips = randomTips.take(2).toList();
+  String? oneTip;
+  if (allTips.isNotEmpty) {
+    allTips.shuffle();
+    oneTip = allTips.first;
+  }
 
   await showModalBottomSheet(
     context: context,
@@ -63,62 +65,36 @@ Future<void> showPracticeBottomSheet(
               ),
               const SizedBox(height: 16),
 
-              Text(
-                topic,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
+              /// ⭐ Centered topic title
+              Center(
+                child: Text(
+                  topic,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              /// Tips list ...
-              if (shownTips.isNotEmpty) ...[
-                Text(
-                  '💡 Quick Tips',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: accent,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                ...shownTips.map(
-                  (tip) => Container(
-                    margin: const EdgeInsets.symmetric(vertical: 6),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.lightbulb_rounded, size: 18, color: accent),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            tip,
-                            style: TextStyle(
-                              color: textColor.withOpacity(0.9),
-                              fontSize: 13.5,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
+              // -------------------------------------------------------------
+              //                QUICK TIPS HEADER + VIEW ALL BUTTON
+              // -------------------------------------------------------------
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '💡 Quick Tips',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 10),
-
-                /// VIEW ALL TIPS
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
+                  /// View All Tips (right side)
+                  TextButton(
                     onPressed: () {
                       Navigator.pop(ctx);
                       Navigator.push(
@@ -128,25 +104,54 @@ Future<void> showPracticeBottomSheet(
                         ),
                       );
                     },
-                    icon: const Icon(Icons.menu_book_rounded, size: 18),
-                    label: const Text("View All Tips"),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: accent, width: 1.2),
-                      foregroundColor: accent,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    child: Text(
+                      "View All",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
                       ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // ONE RANDOM TIP ONLY
+              if (oneTip != null)
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: accent.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.lightbulb_rounded, size: 18, color: accent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          oneTip!,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.9),
+                            fontSize: 13.5,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
-                const SizedBox(height: 24),
-                Divider(color: textColor.withOpacity(0.15)),
-                const SizedBox(height: 16),
-              ],
+              const SizedBox(height: 20),
+              Divider(color: textColor.withOpacity(0.15)),
+              const SizedBox(height: 16),
 
-              /// PRACTICE SETTINGS
+              // -------------------------------------------------------------
+              //                       PRACTICE SETTINGS
+              // -------------------------------------------------------------
               Text(
                 'Practice Settings',
                 style: TextStyle(
@@ -189,56 +194,87 @@ Future<void> showPracticeBottomSheet(
 
               const SizedBox(height: 20),
 
+              // TIME LIMIT
               Text(
-                'Time Limit: ${timeLimit.toInt()} seconds',
+                'Time Limit',
                 style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
               ),
-              Slider(
-                value: timeLimit,
-                min: 10,
-                max: 2000,
-                divisions: 30,
-                activeColor: accent,
-                onChanged: (value) => setState(() => timeLimit = value),
-              ),
+              const SizedBox(height: 8),
 
-              const SizedBox(height: 16),
-
-              // 🔥🔥🔥 NEW BUTTON ADDED HERE
-              /// ---------------------------------------------------------------------
-              /// VIEW PRACTICE HISTORY (TOPIC MODE)
-              /// ---------------------------------------------------------------------
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    final mode = PracticeModeX.fromTitle(topic);
-                    if (mode != null) {
-                      Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PracticeOverviewScreen(mode: mode),
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.history, size: 18),
-                  label: const Text("View Practice History"),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: accent, width: 1.2),
-                    foregroundColor: accent,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Slider(
+                      value: timeLimit,
+                      min: 1,
+                      max: 1200,
+                      divisions: 1199,
+                      activeColor: accent,
+                      onChanged: (value) {
+                        setState(() {
+                          timeLimit = value;
+                          timeCtrl.text = value.toInt().toString();
+                        });
+                      },
                     ),
                   ),
-                ),
+
+                  const SizedBox(width: 12),
+
+                  SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: timeCtrl,
+                      keyboardType: TextInputType.number,
+                      onChanged: (val) {
+                        if (val.isEmpty) return;
+
+                        final n = int.tryParse(val);
+                        if (n == null) return;
+
+                        if (n < 1) {
+                          setState(() {
+                            timeLimit = 1;
+                            timeCtrl.text = '1';
+                          });
+                        } else if (n > 1800) {
+                          setState(() {
+                            timeLimit = 1800;
+                            timeCtrl.text = '1800';
+                          });
+                        } else {
+                          setState(() => timeLimit = n.toDouble());
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: "sec",
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          color: textColor.withOpacity(0.7),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color: accent.withOpacity(0.3),
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: accent, width: 1.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 16),
 
-              /// START PRACTICE BUTTON
+              // START PRACTICE BUTTON
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -276,6 +312,37 @@ Future<void> showPracticeBottomSheet(
                     style: TextStyle(
                       fontSize: 16,
                       color: theme.colorScheme.onPrimary,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // VIEW PRACTICE HISTORY BUTTON
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final mode = PracticeModeX.fromTitle(topic);
+                    if (mode != null) {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PracticeOverviewScreen(mode: mode),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.history, size: 18),
+                  label: const Text("View Practice History"),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: accent, width: 1.2),
+                    foregroundColor: accent,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
