@@ -11,6 +11,7 @@ import '../models/daily_quiz_meta.dart';
 import '../models/daily_score.dart';
 import '../models/user_profile.dart';
 import '../models/user_settings.dart';
+import '../models/practice_mode.dart';
 
 class HiveService {
   static String _dateKey(DateTime d) =>
@@ -62,6 +63,54 @@ class HiveService {
     return Hive.box<DailyScore>(
       'mixed_scores',
     ).values.toList().reversed.toList();
+  }
+
+  /// Generic topic storage: store topic-tagged DailyScore entries in a single box
+  /// and allow filtered reads by PracticeMode.name
+  static Future<void> saveTopicScore(
+    PracticeMode mode,
+    DailyScore score,
+  ) async {
+    final box = await _safeBox<Map>('topic_scores'); // store map entries
+    // store a simple map so we don't need a typed adapter for DailyScore
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    await box.put(id, {
+      'id': id,
+      'mode': mode.name,
+      'date': score.date.toIso8601String(),
+      'score': score.score,
+      'timeTakenSeconds': score.timeTakenSeconds,
+      // optional: include other fields if present in your DailyScore model
+    });
+  }
+
+  /// Returns a list of DailyScore objects filtered by the given PracticeMode.
+  /// If your DailyScore class has more fields, adjust mapping accordingly.
+  static List<DailyScore> getTopicScores(PracticeMode mode) {
+    if (!Hive.isBoxOpen('topic_scores')) return [];
+    final box = Hive.box<Map>('topic_scores');
+    final items = box.values
+        .map((v) => Map<String, dynamic>.from(v))
+        .where((m) => (m['mode'] ?? '') == mode.name)
+        .toList()
+        .reversed
+        .toList();
+
+    // convert maps back to DailyScore — adapt if DailyScore has different ctor
+    final out = <DailyScore>[];
+    for (final m in items) {
+      try {
+        final date = DateTime.parse(m['date'] as String);
+        final score = (m['score'] as num).toInt();
+        final timeTaken = (m['timeTakenSeconds'] as num).toInt();
+        out.add(
+          DailyScore(date: date, score: score, timeTakenSeconds: timeTaken),
+        );
+      } catch (_) {
+        // ignore bad entries
+      }
+    }
+    return out;
   }
 
   // ===========================================================================

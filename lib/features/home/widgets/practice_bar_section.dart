@@ -13,6 +13,7 @@ import '../../../providers/performance_provider.dart';
 import 'master_basics_section.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../quiz/screens/result_screen.dart';
+import '../../../models/practice_mode.dart';
 
 /// 🧮 Unified Practice Zone (below Quick Stats)
 class PracticeBarSection extends StatelessWidget {

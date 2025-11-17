@@ -3,9 +3,17 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+
 import 'practice_overview_screen.dart';
 import '../usecase/generate_questions.dart';
 import '../../../theme/app_theme.dart';
+
+// NEW: import expanded PracticeMode enum
+import '../../../models/practice_mode.dart';
+
+import '../../../services/hive_service.dart';
+// <- ADD THIS LINE
+import '../../../models/daily_score.dart';
 
 // Repository
 import '../quiz_repository.dart';
@@ -61,7 +69,7 @@ class _QuizScreenState extends State<QuizScreen> {
   static const _kInputModeKey = 'input_mode';
 
   late Question currentQuestion;
-  List<String> currentOptions = [];
+  late List<String> currentOptions;
 
   String typedAnswer = '';
   int score = 0;
@@ -74,7 +82,6 @@ class _QuizScreenState extends State<QuizScreen> {
   InputMode inputMode = InputMode.keyboard;
 
   bool showFeedbackCorrect = false;
-
   SharedPreferences? _prefs;
 
   late Color primary;
@@ -141,7 +148,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   // ----------------------------------------------------------------------
-  // TOGGLES (FIXED)
+  // TOGGLES
   // ----------------------------------------------------------------------
   void _toggleAutoSubmit() {
     setState(() => autoSubmit = !autoSubmit);
@@ -186,7 +193,7 @@ class _QuizScreenState extends State<QuizScreen> {
       );
     }
 
-    // Normal practice
+    // Topic-based or normal practice
     return QuestionGenerator.random(
       topic: widget.title,
       min: widget.min,
@@ -195,7 +202,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   // ----------------------------------------------------------------------
-  // INPUT / ANSWERS
+  // INPUT
   // ----------------------------------------------------------------------
   void _onKeyTap(String value) {
     setState(() {
@@ -258,7 +265,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   // ----------------------------------------------------------------------
-  // FINISH QUIZ (FULLY UPDATED)
+  // FINISH QUIZ — FULLY UPDATED
   // ----------------------------------------------------------------------
   Future<void> _finishQuiz() async {
     countdown?.cancel();
@@ -269,42 +276,19 @@ class _QuizScreenState extends State<QuizScreen> {
 
     final repo = QuizRepository();
 
-    switch (widget.mode) {
-      case QuizMode.dailyRanked:
-      case QuizMode.timedRanked:
-        await repo.saveRankedScore(score, timeSpent);
-        if (mounted) {
-          await context.read<PerformanceProvider>().reloadAll();
-        }
-        break;
-
-      case QuizMode.challenge:
-        await repo.saveMixedScore(score, timeSpent);
-        break;
-
-      case QuizMode.practice:
-      default:
-        await repo.savePracticeScore(score, timeSpent);
-    }
-
-    // if (!mounted) return;
-
-    // Navigator.pushReplacement(
-    //   context,
-    //   MaterialPageRoute(
-    //     builder: (_) => ResultScreen(
-    //       score: score,
-    //       timeTakenSeconds: timeSpent,
-    //       mode: widget.mode,
-    //     ),
-    //   ),
-    // );
-    if (!mounted) return;
-
+    // ------------------------------------------------------
+    // 1) RANKED MODES
+    // ------------------------------------------------------
     if (widget.mode == QuizMode.dailyRanked ||
         widget.mode == QuizMode.timedRanked) {
-      // keep existing behaviour for ranked
-      Navigator.pushReplacement(
+      await repo.saveRankedScore(score, timeSpent);
+      if (mounted) {
+        await context.read<PerformanceProvider>().reloadAll();
+      }
+
+      if (!mounted) return;
+
+      await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => ResultScreen(
@@ -314,19 +298,93 @@ class _QuizScreenState extends State<QuizScreen> {
           ),
         ),
       );
-    } else {
-      // For offline practice / mixed -> navigate to PracticeOverviewScreen
-      Navigator.pushReplacement(
+
+      return; // <-- important
+    }
+
+    // ------------------------------------------------------
+    // 2) DAILY PRACTICE
+    // ------------------------------------------------------
+    if (widget.title.toLowerCase() == "daily practice") {
+      await repo.savePracticeScore(score, timeSpent);
+
+      if (!mounted) return;
+
+      await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => PracticeOverviewScreen(
-            mode: widget.mode == QuizMode.challenge
-                ? PracticeMode.mixedPractice
-                : PracticeMode.dailyPractice,
-          ),
+          builder: (_) =>
+              const PracticeOverviewScreen(mode: PracticeMode.dailyPractice),
         ),
       );
+
+      return; // <-- important
     }
+
+    // ------------------------------------------------------
+    // 3) MIXED PRACTICE or CHALLENGE
+    // ------------------------------------------------------
+    if (widget.title.toLowerCase() == "mixed practice" ||
+        widget.mode == QuizMode.challenge ||
+        widget.topics != null) {
+      await repo.saveMixedScore(score, timeSpent);
+
+      if (!mounted) return;
+
+      await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              const PracticeOverviewScreen(mode: PracticeMode.mixedPractice),
+        ),
+      );
+
+      return; // <-- important
+    }
+
+    // ------------------------------------------------------
+    // 4) TOPIC MODES (Addition, Division, Tables, etc.)
+    // ------------------------------------------------------
+    final topicMode = PracticeModeX.fromTitle(widget.title);
+
+    if (topicMode != null) {
+      await HiveService.saveTopicScore(
+        topicMode,
+        DailyScore(
+          score: score,
+          timeTakenSeconds: timeSpent,
+          date: DateTime.now(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PracticeOverviewScreen(mode: topicMode),
+        ),
+      );
+
+      return; // <-- important
+    }
+
+    // ------------------------------------------------------
+    // 5) FALLBACK — Save as daily practice
+    // ------------------------------------------------------
+    await repo.savePracticeScore(score, timeSpent);
+
+    if (!mounted) return;
+
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            const PracticeOverviewScreen(mode: PracticeMode.dailyPractice),
+      ),
+    );
+
+    return; // <-- important
   }
 
   // ----------------------------------------------------------------------

@@ -10,8 +10,30 @@ import '../../quiz/screens/quiz_screen.dart';
 import '../../quiz/screens/setup/mixed_quiz_setup_screen.dart';
 import '../../performance/screens/performance_screen.dart';
 import '../../home/screens/home_screen.dart';
+import '../../home/widgets/practice_bottom_sheet.dart';
+import '../../../models/practice_mode.dart';
 
-enum PracticeMode { dailyPractice, mixedPractice }
+/// ---------------------------------------------------------------------------
+/// ✅ PracticeOverviewScreen — now supports many topic modes + daily/mixed.
+/// ---------------------------------------------------------------------------
+
+const Map<PracticeMode, String> practiceModeTitles = {
+  PracticeMode.dailyPractice: "Daily Practice",
+  PracticeMode.mixedPractice: "Mixed Practice",
+
+  PracticeMode.addition: "Addition",
+  PracticeMode.subtraction: "Subtraction",
+  PracticeMode.multiplication: "Multiplication",
+  PracticeMode.division: "Division",
+  PracticeMode.percentage: "Percentage",
+  PracticeMode.average: "Average",
+  PracticeMode.square: "Square",
+  PracticeMode.cube: "Cube",
+  PracticeMode.squareRoot: "Square Root",
+  PracticeMode.cubeRoot: "Cube Root",
+  PracticeMode.tables: "Tables",
+  PracticeMode.dataInterpretation: "Data Interpretation",
+};
 
 class PracticeOverviewScreen extends StatelessWidget {
   final PracticeMode mode;
@@ -19,17 +41,25 @@ class PracticeOverviewScreen extends StatelessWidget {
   const PracticeOverviewScreen({super.key, required this.mode});
 
   bool get isDaily => mode == PracticeMode.dailyPractice;
+  bool get isMixed => mode == PracticeMode.mixedPractice;
+  bool get isTopic =>
+      !(isDaily || isMixed); // any mode other than daily/mixed is a topic
 
-  // Fixed daily practice configuration
+  // Fixed daily practice configuration (unchanged)
   static const int dailyMin = 1;
   static const int dailyMax = 50;
   static const int dailyCount = 10;
   static const int dailyTimeLimit = 0;
 
   List<DailyScore> _loadHistory() {
-    return isDaily
-        ? HiveService.getPracticeScores()
-        : HiveService.getMixedScores();
+    if (isDaily) {
+      return HiveService.getPracticeScores();
+    } else if (isMixed) {
+      return HiveService.getMixedScores();
+    } else {
+      // Topic-specific history (filtered by mode)
+      return HiveService.getTopicScores(mode);
+    }
   }
 
   String _formatDuration(int sec) {
@@ -45,8 +75,10 @@ class PracticeOverviewScreen extends StatelessWidget {
     final surface = AppTheme.adaptiveCard(context);
 
     final attempts = _loadHistory()..sort((a, b) => b.date.compareTo(a.date));
-
     final lastAttempt = attempts.isNotEmpty ? attempts.first : null;
+
+    final title =
+        practiceModeTitles[mode] ?? (isDaily ? "Daily Practice" : "Practice");
 
     return WillPopScope(
       onWillPop: () async {
@@ -62,7 +94,7 @@ class PracticeOverviewScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: accent,
           centerTitle: true,
-          title: Text(isDaily ? "Daily Practice" : "Mixed Practice"),
+          title: Text(title),
           leading: IconButton(
             icon: Icon(Icons.arrow_back_rounded),
             onPressed: () {
@@ -139,13 +171,19 @@ class PracticeOverviewScreen extends StatelessWidget {
                                         ),
                                       ),
                                     );
-                                  } else {
+                                  } else if (isMixed) {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) =>
                                             const MixedQuizSetupScreen(),
                                       ),
+                                    );
+                                  } else {
+                                    // For topics, open the practice bottom sheet (user picks min/max/time)
+                                    showPracticeBottomSheet(
+                                      context,
+                                      topic: title,
                                     );
                                   }
                                 },
@@ -208,7 +246,7 @@ class PracticeOverviewScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isDaily ? "Daily Practice" : "Mixed Practice",
+                        title,
                         style: TextStyle(
                           color: textColor,
                           fontSize: 16,
@@ -219,7 +257,9 @@ class PracticeOverviewScreen extends StatelessWidget {
                       Text(
                         isDaily
                             ? "10 questions • No time limit.\nBuild your speed daily!"
-                            : "Select topics & ranges to create your custom practice quiz.",
+                            : isMixed
+                            ? "Select topics & ranges to create your custom practice quiz."
+                            : "Choose range & time — questions will be generated continuously based on your inputs.",
                         style: TextStyle(color: textColor.withOpacity(0.8)),
                       ),
                       const SizedBox(height: 14),
@@ -241,13 +281,16 @@ class PracticeOverviewScreen extends StatelessWidget {
                                   ),
                                 ),
                               );
-                            } else {
+                            } else if (isMixed) {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const MixedQuizSetupScreen(),
                                 ),
                               );
+                            } else {
+                              // topics -> open bottom sheet
+                              showPracticeBottomSheet(context, topic: title);
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -261,7 +304,9 @@ class PracticeOverviewScreen extends StatelessWidget {
                           child: Text(
                             isDaily
                                 ? "Start Daily Practice"
-                                : "Start Mixed Setup",
+                                : isMixed
+                                ? "Start Mixed Setup"
+                                : "Start Practice",
                           ),
                         ),
                       ),
