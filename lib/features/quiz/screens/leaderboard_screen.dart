@@ -18,7 +18,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   final user = FirebaseAuth.instance.currentUser;
   final QuizRepository _quizRepo = QuizRepository();
 
-  /// Selected tab: daily | weekly
   String selectedTab = "daily";
 
   int? myDailyRank;
@@ -35,7 +34,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // -----------------------------------------------------------
-  // DATE KEYS
+  // DATE KEY (yyyy-MM-dd)
   // -----------------------------------------------------------
   String get todayKey {
     final now = DateTime.now();
@@ -43,7 +42,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // -----------------------------------------------------------
-  // FETCH DAILY RANK
+  // DAILY RANK
   // -----------------------------------------------------------
   Future<void> _fetchDailyRank() async {
     if (user == null) return;
@@ -76,7 +75,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // -----------------------------------------------------------
-  // FETCH WEEKLY RANK
+  // WEEKLY RANK
   // -----------------------------------------------------------
   Future<void> _fetchWeeklyRank() async {
     if (user == null) return;
@@ -100,13 +99,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   // -----------------------------------------------------------
-  // WEEKLY LEADERBOARD = best score from last 7 days
+  // WEEKLY = best score in last 7 days
   // -----------------------------------------------------------
   Future<List<Map<String, dynamic>>> _fetchWeeklyLeaderboardList() async {
-    final Map<String, Map<String, dynamic>> bestByUser = {};
-
     final now = DateTime.now();
     final last7days = List.generate(7, (i) => now.subtract(Duration(days: i)));
+
+    final Map<String, Map<String, dynamic>> bestByUser = {};
 
     for (final d in last7days) {
       final key =
@@ -121,24 +120,36 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       for (final doc in snap.docs) {
         final data = doc.data();
         final uid = data["uid"];
+
         final score = data["score"] ?? 0;
-        final ts = (data["timestamp"] as Timestamp?)?.toDate() ?? d;
+        final timeTaken = data["timeTaken"] ?? 9999;
+        final timestamp = (data["timestamp"] as Timestamp?)?.toDate() ?? d;
 
         if (!bestByUser.containsKey(uid) ||
-            score > (bestByUser[uid]!["score"] ?? -999)) {
+            score > bestByUser[uid]!["score"] ||
+            (score == bestByUser[uid]!["score"] &&
+                timeTaken < bestByUser[uid]!["timeTaken"])) {
           bestByUser[uid] = {
             "uid": uid,
             "name": data["name"] ?? "Player",
             "photoUrl": data["photoUrl"] ?? "",
             "score": score,
-            "date": ts,
+            "timeTaken": timeTaken,
+            "date": timestamp,
           };
         }
       }
     }
 
     final list = bestByUser.values.toList();
-    list.sort((a, b) => b["score"].compareTo(a["score"]));
+
+    // Sort: score DESC, timeTaken ASC
+    list.sort((a, b) {
+      final scoreCmp = b["score"].compareTo(a["score"]);
+      if (scoreCmp != 0) return scoreCmp;
+      return a["timeTaken"].compareTo(b["timeTaken"]);
+    });
+
     return list;
   }
 
@@ -153,7 +164,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Leaderboard"),
+        title: const Text("Leaderboard"),
         backgroundColor: accent,
         centerTitle: true,
         actions: [
@@ -179,9 +190,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   // TABS
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   Widget _tabs(Color textColor, Color accent) {
     const tabs = ["daily", "weekly"];
     const labels = ["Daily", "Weekly"];
@@ -224,9 +235,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   // TAB CONTENT
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   Widget _tabContent(Color textColor, Color accent) {
     if (selectedTab == "daily") {
       return _dailyLeaderboard(textColor, accent);
@@ -243,9 +254,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
   }
 
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   // DAILY STREAM
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   Widget _dailyLeaderboard(Color textColor, Color accent) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _quizRepo.getDailyLeaderboard(),
@@ -261,7 +272,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             "name": d["name"] ?? "Player",
             "photoUrl": d["photoUrl"] ?? "",
             "score": d["score"] ?? 0,
-            "date": (d["timestamp"] as Timestamp?)?.toDate(),
+            "timeTaken": d["timeTaken"] ?? 9999,
+            "date": (d["timestamp"] as Timestamp?)?.toDate() ?? DateTime.now(),
           };
         }).toList();
 
@@ -270,9 +282,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  //----------------------------------------------------------------
-  // LEADERBOARD ITEM UI
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
+  // LIST UI
+  // -----------------------------------------------------------
   Widget _buildLeaderboardList(
     List<Map<String, dynamic>> list,
     Color textColor,
@@ -295,8 +307,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         final rank = index + 1;
         final isYou = user != null && entry["uid"] == user!.uid;
 
-        final DateTime? date = entry["date"];
-        final String day = date != null ? DateFormat('EEE').format(date) : "";
+        final date = entry["date"] as DateTime?;
+        final day = date != null ? DateFormat('EEE').format(date) : "";
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -347,7 +359,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   ),
                 ),
               ),
-
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -376,9 +387,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   // YOUR RANK SECTION
-  //----------------------------------------------------------------
+  // -----------------------------------------------------------
   Widget? _yourRankSection() {
     if (user == null) return null;
 
@@ -400,8 +411,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
     final score = data["score"] ?? 0;
 
-    DateTime? date = data["date"];
-    final String day = date != null ? DateFormat('EEE').format(date) : "";
+    final DateTime? date = data["date"];
+    final day = date != null ? DateFormat('EEE').format(date) : "";
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),

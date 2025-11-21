@@ -15,6 +15,8 @@ import '../../../services/hive_service.dart';
 import '../../../providers/performance_provider.dart';
 import '../../quiz/widgets/quiz_entry_popup.dart';
 import '../../auth/auth_provider.dart' as myauth;
+import '../../quiz/screens/result_screen.dart';
+import '../../../models/practice_mode.dart'; // ensure QuizMode is imported
 
 class QuickStatsSection extends StatefulWidget {
   final bool isDarkMode;
@@ -293,8 +295,6 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
   Future<int?> _computeWeeklyRank(String uid) async {
     try {
       final now = DateTime.now();
-
-      // LAST 7 DAYS KEY LIST
       final last7 = List.generate(7, (i) => now.subtract(Duration(days: i)));
 
       Map<String, int> bestByUser = {};
@@ -413,6 +413,9 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
     );
   }
 
+  // ----------------------------------------------------------------------
+  // --------------------------- RANKED SECTION ---------------------------
+  // ----------------------------------------------------------------------
   Widget _rankedSection(Color accent, Color textColor) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -459,54 +462,129 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
             ],
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
 
+          // MAIN BUTTON
           ValueListenableBuilder<bool>(
             valueListenable: attemptedToday,
             builder: (_, played, __) {
-              return ElevatedButton.icon(
-                onPressed: () {
-                  if (played) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const LeaderboardScreen(),
-                      ),
-                    );
-                  } else {
-                    showQuizEntryPopup(
-                      context: context,
-                      title: "Daily Ranked Quiz",
-                      infoLines: [
-                        "150 seconds timer",
-                        "Score = total correct answers",
-                        "1 attempt per day",
-                      ],
-                      onStart: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const DailyRankedQuizEntry(),
+              return SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    if (played) {
+                      // ⭐ USER HAS ATTEMPTED → SHOW RANKED RESULT SCREEN
+
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user == null) return;
+
+                      final uid = user.uid;
+                      final now = DateTime.now();
+
+                      final todayKey =
+                          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+                      final doc = await FirebaseFirestore.instance
+                          .collection("daily_leaderboard")
+                          .doc(todayKey)
+                          .collection("entries")
+                          .doc(uid)
+                          .get();
+
+                      final score = todayScore.value ?? 0;
+                      final timeTaken = (doc.data()?["timeTaken"] ?? 0).toInt();
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ResultScreen(
+                            score: score,
+                            timeTakenSeconds: timeTaken,
                           ),
-                        ).then((_) async => await _fetchStats());
-                      },
-                    );
-                  }
-                },
-                icon: Icon(played ? Icons.leaderboard : Icons.flash_on_rounded),
-                label: Text(played ? "View Leaderboard" : "Take Today's Quiz"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accent,
-                  foregroundColor: Colors.white,
+                        ),
+                      );
+                    } else {
+                      // ⭐ START QUIZ NOW
+                      showQuizEntryPopup(
+                        context: context,
+                        title: "Daily Ranked Quiz",
+                        infoLines: const [
+                          "150 seconds timer",
+                          "Score = total correct answers",
+                          "1 attempt per day",
+                        ],
+                        onStart: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const DailyRankedQuizEntry(),
+                            ),
+                          ).then((_) async => await _fetchStats());
+                        },
+                      );
+                    }
+                  },
+                  icon: Icon(
+                    played ? Icons.assessment_rounded : Icons.flash_on_rounded,
+                    size: 22,
+                  ),
+                  label: Text(
+                    played ? "View Ranked Result" : "Take Today's Quiz",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
                 ),
               );
             },
+          ),
+
+          const SizedBox(height: 12),
+
+          // ALWAYS SHOW LEADERBOARD BUTTON
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                );
+              },
+              icon: const Icon(Icons.emoji_events_rounded, size: 22),
+              label: const Text(
+                "View Leaderboard",
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent.withOpacity(0.85),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ----------------------------------------------------------------------
+  // ------------------------------ OTHER UI ------------------------------
+  // ----------------------------------------------------------------------
   Widget _valueBox(
     ValueNotifier notifier,
     IconData icon,

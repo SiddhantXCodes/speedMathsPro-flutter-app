@@ -53,7 +53,7 @@ class QuizRepository {
   }
 
   // ===========================================================================
-  // 🟥 RANKED QUIZ → FIREBASE + OFFLINE QUEUE
+  // 🟥 RANKED QUIZ → FIREBASE (ONE SCORE PER DAY)
   // ===========================================================================
   Future<void> saveRankedScore(int score, int timeTakenSeconds) async {
     final user = _auth.currentUser;
@@ -78,74 +78,83 @@ class QuizRepository {
   }
 
   // ===========================================================================
-  // 🟩 INTERNAL — UPLOAD RANKED ATTEMPT (FIXED TIMESTAMP)
+  // 🟩 INTERNAL — SAVE RANKED ATTEMPT (ONE PER DAY)
   // ===========================================================================
   Future<void> _uploadRankedToFirebase(
     User user,
     int score,
     int timeTakenSeconds,
   ) async {
-    final today = DateTime.now();
+    final now = DateTime.now();
+
+    // yyyy-MM-dd
     final todayKey =
-        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
     // -----------------------------
-    // 1️⃣ Save full attempt history
+    // 1️⃣ Save ONE ranked attempt per day (overwrite)
     // -----------------------------
     final attemptRef = _firestore
         .collection("ranked_attempts")
         .doc(user.uid)
         .collection("attempts")
-        .doc();
+        .doc(todayKey); // ✔ ONE ATTEMPT PER DAY
 
     await attemptRef.set({
       "uid": user.uid,
       "score": score,
       "timeTaken": timeTakenSeconds,
-      "timestamp": FieldValue.serverTimestamp(), // FIXED
-    });
+      "timestamp": FieldValue.serverTimestamp(),
+      "dateKey": todayKey,
+    }, SetOptions(merge: true));
 
-    dev.log("📌 Ranked attempt saved → ranked_attempts");
+    dev.log("📌 Ranked daily attempt saved → $todayKey");
 
     // -----------------------------
-    // 2️⃣ Update Daily Leaderboard
+    // 2️⃣ Update Daily Leaderboard (also ONE per day)
     // -----------------------------
-    final dailyRef = _firestore
+    final leaderboardRef = _firestore
         .collection("daily_leaderboard")
         .doc(todayKey)
         .collection("entries")
         .doc(user.uid);
 
-    await dailyRef.set({
+    await leaderboardRef.set({
       "uid": user.uid,
       "name": user.displayName ?? "Player",
       "photoUrl": user.photoURL ?? "",
       "score": score,
       "timeTaken": timeTakenSeconds,
-      "timestamp": FieldValue.serverTimestamp(), // FIXED
+      "timestamp": FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    dev.log("🏆 Daily leaderboard updated ($todayKey)");
+    dev.log("🏆 Leaderboard updated → $todayKey");
   }
 
   // ===========================================================================
-  // 🟨 OFFLINE QUEUE
+  // 🟨 OFFLINE QUEUE (updated — still stores ONLY one score per day)
   // ===========================================================================
   Future<void> _queueOfflineRanked(int score, int timeTakenSeconds) async {
+    final now = DateTime.now();
+    final todayKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
     try {
       await HiveService.queueForSync("ranked_attempt", {
         "score": score,
         "timeTaken": timeTakenSeconds,
-        "timestamp": DateTime.now().toIso8601String(),
+        "timestamp": now.toIso8601String(),
+        "dateKey": todayKey,
       });
-      dev.log("📥 Offline ranked attempt queued");
+
+      dev.log("📥 Offline ranked attempt queued ($todayKey)");
     } catch (e, st) {
       dev.log("❌ Failed queueing ranked attempt: $e", stackTrace: st);
     }
   }
 
   // ===========================================================================
-  // 🔄 SYNC OFFLINE RANKED ATTEMPTS
+  // 🔄 SYNC OFFLINE RANKED ATTEMPTS (one per day)
   // ===========================================================================
   Future<void> syncOfflineRankedFromQueue(Map<String, dynamic> data) async {
     final user = _auth.currentUser;
@@ -167,7 +176,9 @@ class QuizRepository {
   // 🟦 DAILY LEADERBOARD STREAM
   // ===========================================================================
   Stream<QuerySnapshot<Map<String, dynamic>>> getDailyLeaderboard() {
-    final todayKey = DateTime.now().toIso8601String().substring(0, 10);
+    final now = DateTime.now();
+    final todayKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
     return _firestore
         .collection("daily_leaderboard")
@@ -185,14 +196,16 @@ class QuizRepository {
     final user = _auth.currentUser;
     if (user == null) return false;
 
-    try {
-      final todayKey = DateTime.now().toIso8601String().substring(0, 10);
+    final now = DateTime.now();
+    final todayKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
+    try {
       final doc = await _firestore
-          .collection("daily_leaderboard")
-          .doc(todayKey)
-          .collection("entries")
+          .collection("ranked_attempts")
           .doc(user.uid)
+          .collection("attempts")
+          .doc(todayKey)
           .get();
 
       return doc.exists;

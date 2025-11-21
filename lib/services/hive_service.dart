@@ -39,17 +39,14 @@ class HiveService {
     ).values.toList().reversed.toList();
   }
 
-  /// 🟥 Ranked (ranked_scores)
+  /// 🟥 Ranked — Firebase ONLY (do not store in Hive)
   static Future<void> saveRankedScore(DailyScore score) async {
-    final box = await _safeBox<DailyScore>('ranked_scores');
-    await box.add(score);
+    // Deprecated — ranked is Firebase only
   }
 
   static List<DailyScore> getRankedScores() {
-    if (!Hive.isBoxOpen('ranked_scores')) return [];
-    return Hive.box<DailyScore>(
-      'ranked_scores',
-    ).values.toList().reversed.toList();
+    // Always empty — ranked stored ONLY in Firebase now
+    return [];
   }
 
   /// 🟨 Mixed / Challenge (mixed_scores)
@@ -65,30 +62,27 @@ class HiveService {
     ).values.toList().reversed.toList();
   }
 
-  /// Generic topic storage: store topic-tagged DailyScore entries in a single box
-  /// and allow filtered reads by PracticeMode.name
+  /// ⭐ Topic-based scores (store maps to avoid adapters)
   static Future<void> saveTopicScore(
     PracticeMode mode,
     DailyScore score,
   ) async {
-    final box = await _safeBox<Map>('topic_scores'); // store map entries
-    // store a simple map so we don't need a typed adapter for DailyScore
+    final box = await _safeBox<Map>('topic_scores');
     final id = DateTime.now().millisecondsSinceEpoch.toString();
+
     await box.put(id, {
       'id': id,
       'mode': mode.name,
-      'date': score.date.toIso8601String(),
+      'date': _dateKey(score.date), // FIXED → yyyy-MM-dd
       'score': score.score,
       'timeTakenSeconds': score.timeTakenSeconds,
-      // optional: include other fields if present in your DailyScore model
     });
   }
 
-  /// Returns a list of DailyScore objects filtered by the given PracticeMode.
-  /// If your DailyScore class has more fields, adjust mapping accordingly.
   static List<DailyScore> getTopicScores(PracticeMode mode) {
     if (!Hive.isBoxOpen('topic_scores')) return [];
     final box = Hive.box<Map>('topic_scores');
+
     final items = box.values
         .map((v) => Map<String, dynamic>.from(v))
         .where((m) => (m['mode'] ?? '') == mode.name)
@@ -96,20 +90,29 @@ class HiveService {
         .reversed
         .toList();
 
-    // convert maps back to DailyScore — adapt if DailyScore has different ctor
     final out = <DailyScore>[];
+
     for (final m in items) {
       try {
-        final date = DateTime.parse(m['date'] as String);
+        // Parse yyyy-MM-dd
+        final parts = (m['date'] as String).split('-');
+        final date = DateTime(
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+          int.parse(parts[2]),
+        );
+
         final score = (m['score'] as num).toInt();
         final timeTaken = (m['timeTakenSeconds'] as num).toInt();
+
         out.add(
           DailyScore(date: date, score: score, timeTakenSeconds: timeTaken),
         );
       } catch (_) {
-        // ignore bad entries
+        // Ignore corrupted entries
       }
     }
+
     return out;
   }
 
@@ -318,7 +321,7 @@ class HiveService {
     await (await _safeBox<Map>('sync_queue')).clear();
 
     await (await _safeBox<DailyScore>('practice_scores')).clear();
-    await (await _safeBox<DailyScore>('ranked_scores')).clear();
     await (await _safeBox<DailyScore>('mixed_scores')).clear();
+    // ranked_scores removed (not used anymore)
   }
 }

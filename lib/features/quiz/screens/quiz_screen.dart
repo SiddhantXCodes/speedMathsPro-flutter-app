@@ -291,11 +291,8 @@ class _QuizScreenState extends State<QuizScreen> {
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => ResultScreen(
-            score: score,
-            timeTakenSeconds: timeSpent,
-            mode: widget.mode,
-          ),
+          builder: (_) =>
+              ResultScreen(score: score, timeTakenSeconds: timeSpent),
         ),
       );
 

@@ -1,4 +1,5 @@
 // lib/services/sync_manager.dart
+
 import 'dart:async';
 import 'dart:developer';
 
@@ -130,8 +131,9 @@ class SyncManager {
           if (type == 'practice_logs') {
             // Already handled via PracticeRepository
             await practiceRepo.syncPendingSessions();
-          } else if (type == 'ranked_quiz') {
-            // Ranked quiz queued upload
+          } else if (type == 'ranked_attempt') {
+            // ✔ Correct updated key from QuizRepository
+            log("📤 Syncing offline ranked attempt...");
             await quizRepo.syncOfflineRankedFromQueue(data);
           } else {
             log("⚠️ Unknown sync type: $type");
@@ -141,8 +143,8 @@ class SyncManager {
           // Remove once synced
           await box.delete(key);
           log("🧹 Synced and removed queue item: $type");
-        } catch (e) {
-          log("❌ Failed to sync item ($type): $e");
+        } catch (e, st) {
+          log("❌ Failed to sync item ($type): $e", stackTrace: st);
           continue;
         }
       }

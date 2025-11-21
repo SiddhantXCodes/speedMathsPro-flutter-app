@@ -11,30 +11,50 @@ import '../../performance/screens/performance_screen.dart';
 import '../../home/screens/home_screen.dart';
 import 'leaderboard_screen.dart';
 import '../../../providers/performance_provider.dart';
-import '../../../services/hive_service.dart';
 import '../../../models/daily_score.dart';
 
-import 'quiz_screen.dart';
-
 class ResultScreen extends StatelessWidget {
-  final int score;
-  final int timeTakenSeconds;
-  final QuizMode mode;
-
+  final int score; // ignored, firebase will be used
+  final int timeTakenSeconds; // from quiz
   const ResultScreen({
     super.key,
     required this.score,
     required this.timeTakenSeconds,
-    this.mode = QuizMode.practice,
   });
 
-  bool get isRanked =>
-      mode == QuizMode.dailyRanked || mode == QuizMode.timedRanked;
+  // Today key
+  String get todayKey {
+    final now = DateTime.now();
+    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  }
 
-  // -------------------------------------------------------------
-  // 🔥 FETCH RANKED HISTORY FROM FIREBASE
-  // -------------------------------------------------------------
-  Future<List<DailyScore>> _loadRankedHistoryFromFirebase() async {
+  // --------------------------------------------------------------------------
+  // FETCH TODAY'S RANKED SCORE
+  // --------------------------------------------------------------------------
+  Future<DailyScore?> _loadTodayRankedScore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+
+    final doc = await FirebaseFirestore.instance
+        .collection("ranked_attempts")
+        .doc(user.uid)
+        .collection("attempts")
+        .doc(todayKey)
+        .get();
+
+    if (!doc.exists) return null;
+
+    final d = doc.data()!;
+    return DailyScore(
+      score: d["score"],
+      date: (d["timestamp"] as Timestamp).toDate(),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // FETCH RANKED HISTORY (one per day)
+  // --------------------------------------------------------------------------
+  Future<List<DailyScore>> _loadRankedHistory() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
 
@@ -46,42 +66,27 @@ class ResultScreen extends StatelessWidget {
         .get();
 
     return snap.docs.map((doc) {
-      final d = doc.data();
+      final m = doc.data();
       return DailyScore(
-        score: d["score"],
-        date: (d["timestamp"] as Timestamp).toDate(),
+        score: m["score"],
+        date: (m["timestamp"] as Timestamp).toDate(),
       );
     }).toList();
   }
 
-  // -------------------------------------------------------------
-  // 🔥 LOAD HISTORY (Firebase for ranked, Hive for others)
-  // -------------------------------------------------------------
-  Future<List<DailyScore>> _loadHistory() async {
-    switch (mode) {
-      case QuizMode.practice:
-        return HiveService.getPracticeScores();
-      case QuizMode.challenge:
-        return HiveService.getMixedScores();
-      case QuizMode.dailyRanked:
-      case QuizMode.timedRanked:
-        return _loadRankedHistoryFromFirebase(); // 🔥 FIREBASE
-      default:
-        return HiveService.getPracticeScores();
-    }
-  }
-
+  // --------------------------------------------------------------------------
+  // UI
+  // --------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final accent = AppTheme.adaptiveAccent(context);
     final textColor = AppTheme.adaptiveText(context);
     final surface = AppTheme.adaptiveCard(context);
 
-    if (isRanked) {
-      Future.microtask(() {
-        Provider.of<PerformanceProvider>(context, listen: false).reloadAll();
-      });
-    }
+    // Refresh performance after ranked attempt
+    Future.microtask(() {
+      Provider.of<PerformanceProvider>(context, listen: false).reloadAll();
+    });
 
     final mins = (timeTakenSeconds ~/ 60).toString().padLeft(2, '0');
     final secs = (timeTakenSeconds % 60).toString().padLeft(2, '0');
@@ -97,7 +102,6 @@ class ResultScreen extends StatelessWidget {
       },
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
         appBar: AppBar(
           backgroundColor: accent,
           leading: IconButton(
@@ -110,7 +114,7 @@ class ResultScreen extends StatelessWidget {
               );
             },
           ),
-          title: Text(isRanked ? "Ranked Result" : "Quiz Result"),
+          title: const Text("Ranked Result"),
           centerTitle: true,
         ),
 
@@ -118,57 +122,64 @@ class ResultScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // ----------------------------------------------------
-              // ⭐ SCORE CARD
-              // ----------------------------------------------------
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.emoji_events_rounded,
-                      color: isRanked ? Colors.amber : accent,
-                      size: 40,
+              // ------------------------------------------------------------------
+              // TODAY SCORE CARD (always from Firebase)
+              // ------------------------------------------------------------------
+              FutureBuilder<DailyScore?>(
+                future: _loadTodayRankedScore(),
+                builder: (context, snap) {
+                  final todayScore = snap.data?.score ?? score;
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "Your Today's Score",
-                      style: TextStyle(
-                        color: textColor.withOpacity(0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.emoji_events_rounded,
+                          color: Colors.amber,
+                          size: 40,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "Your Today's Score",
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          "$todayScore",
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            color: accent,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          "Time Taken: ${mins}m ${secs}s",
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.8),
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      "$score",
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      "Time Taken: ${mins}m ${secs}s",
-                      style: TextStyle(
-                        color: textColor.withOpacity(0.8),
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
 
               const SizedBox(height: 20),
 
-              // ----------------------------------------------------
-              // 🔘 MAIN BUTTONS
-              // ----------------------------------------------------
+              // ------------------------------------------------------------------
+              // MAIN BUTTONS
+              // ------------------------------------------------------------------
               Row(
                 children: [
                   Expanded(
@@ -192,39 +203,36 @@ class ResultScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  if (isRanked) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LeaderboardScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.leaderboard_rounded),
-                        label: const Text("Leaderboard"),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: accent, width: 1.5),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const LeaderboardScreen(),
                           ),
+                        );
+                      },
+                      icon: const Icon(Icons.leaderboard_rounded),
+                      label: const Text("Leaderboard"),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: accent, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
 
               const SizedBox(height: 18),
 
-              // ----------------------------------------------------
-              // 📊 PERFORMANCE PAGE
-              // ----------------------------------------------------
+              // ------------------------------------------------------------------
+              // PERFORMANCE PAGE BUTTON
+              // ------------------------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -250,19 +258,18 @@ class ResultScreen extends StatelessWidget {
 
               const SizedBox(height: 22),
 
-              // ------------------------------------------------------------
-              // 📌 PAST ATTEMPTS (FutureBuilder)
-              // ------------------------------------------------------------
+              // ------------------------------------------------------------------
+              // PAST ATTEMPTS — ALWAYS FROM FIREBASE
+              // ------------------------------------------------------------------
               Expanded(
                 child: FutureBuilder<List<DailyScore>>(
-                  future: _loadHistory(),
+                  future: _loadRankedHistory(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
 
                     final history = snapshot.data!;
-
                     return Column(
                       children: [
                         Align(
@@ -289,37 +296,18 @@ class ResultScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    "Date",
-                                    style: TextStyle(
-                                      color: textColor.withOpacity(0.8),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
+                              children: const [
+                                Expanded(child: Text("Date")),
                                 Expanded(
                                   child: Text(
                                     "Time",
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: textColor.withOpacity(0.8),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
                                   ),
                                 ),
                                 Expanded(
                                   child: Text(
                                     "Score",
                                     textAlign: TextAlign.right,
-                                    style: TextStyle(
-                                      color: textColor.withOpacity(0.8),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
                                   ),
                                 ),
                               ],
@@ -389,7 +377,6 @@ class ResultScreen extends StatelessWidget {
                                                 color: textColor.withOpacity(
                                                   0.7,
                                                 ),
-                                                fontSize: 13,
                                               ),
                                             ),
                                           ),
