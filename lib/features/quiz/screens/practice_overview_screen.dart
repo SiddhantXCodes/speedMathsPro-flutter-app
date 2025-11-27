@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../../../theme/app_theme.dart';
 import '../../../services/hive_service.dart';
 import '../../../models/daily_score.dart';
@@ -20,7 +19,6 @@ import '../../../models/practice_mode.dart';
 const Map<PracticeMode, String> practiceModeTitles = {
   PracticeMode.dailyPractice: "Daily Practice",
   PracticeMode.mixedPractice: "Mixed Practice",
-
   PracticeMode.addition: "Addition",
   PracticeMode.subtraction: "Subtraction",
   PracticeMode.multiplication: "Multiplication",

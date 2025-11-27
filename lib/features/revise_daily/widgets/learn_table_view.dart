@@ -1,4 +1,3 @@
-//lib/features/learn_daily/widgets/learn_table_view.dart
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 
@@ -15,16 +14,15 @@ class _LearnTableViewState extends State<LearnTableView> {
   late List<Map<String, dynamic>> groups;
   int selectedGroupIndex = 0;
 
-  static const double _cellHeight = 48;
-  static const double _leftColumnWidth = 60;
+  static const double _leftColumnWidth = 70;
   static const int _tablesPerGroup = 5;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(viewportFraction: 1.0);
+    _pageController = PageController();
 
-    // 1–100 divided into 20 groups (1–5, 6–10, ...)
+    // Generate groups of 5
     groups = List.generate(20, (i) {
       final start = (i * _tablesPerGroup) + 1;
       final end = start + _tablesPerGroup - 1;
@@ -48,7 +46,7 @@ class _LearnTableViewState extends State<LearnTableView> {
         Expanded(
           child: Row(
             children: [
-              _buildFixedLeftColumn(accent),
+              _buildLeftColumn(accent),
               _buildPagedTables(context, accent, textColor),
             ],
           ),
@@ -58,172 +56,217 @@ class _LearnTableViewState extends State<LearnTableView> {
     );
   }
 
-  /// 🧮 Fixed x1–x10 column
-  Widget _buildFixedLeftColumn(Color accent) {
-    return Container(
-      width: _leftColumnWidth,
-      color: accent.withOpacity(0.9),
-      child: Column(
-        children: [
-          Container(height: _cellHeight, color: accent.withOpacity(0.15)),
-          for (int i = 1; i <= 10; i++)
-            Container(
-              height: _cellHeight,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withOpacity(0.2),
-                    width: 0.6,
+  // ---------------------------------------------------------------------------
+  // LEFT COLUMN — uses dynamic height also
+  // ---------------------------------------------------------------------------
+
+  Widget _buildLeftColumn(Color accent) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double cellHeight = constraints.maxHeight / 11;
+
+        return Container(
+          width: _leftColumnWidth,
+          color: accent.withOpacity(0.85),
+          child: Column(
+            children: [
+              // Header: ×
+              Container(
+                height: cellHeight,
+                alignment: Alignment.center,
+                color: accent.withOpacity(0.15),
+                child: Text(
+                  "×",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: cellHeight * 0.40,
                   ),
                 ),
               ),
-              child: Text(
-                'x$i',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14.5,
+
+              // Rows x1–x10
+              for (int i = 1; i <= 10; i++)
+                Container(
+                  height: cellHeight,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.white24)),
+                  ),
+                  child: Text(
+                    "x$i",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: cellHeight * 0.30,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  /// 📊 Right side: Full-height page for each group of 5 tables
+  // ---------------------------------------------------------------------------
+  // RIGHT — PAGEVIEW (dynamic height applied)
+  // ---------------------------------------------------------------------------
+
   Widget _buildPagedTables(
     BuildContext context,
     Color accent,
     Color textColor,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final double availableWidth = screenWidth - _leftColumnWidth;
-    final double columnWidth = availableWidth / _tablesPerGroup;
-
     return Expanded(
       child: PageView.builder(
         controller: _pageController,
         itemCount: groups.length,
-        physics: const BouncingScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         onPageChanged: (i) => setState(() => selectedGroupIndex = i),
         itemBuilder: (context, index) {
-          final group = groups[index];
-          final start = group['start'] as int;
-          final end = group['end'] as int;
+          final start = groups[index]['start'];
+          final end = groups[index]['end'];
 
-          return Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            child: Row(
-              children: [
-                for (int n = start; n <= end; n++)
-                  _buildTableColumn(context, n, textColor, accent, columnWidth),
-              ],
-            ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final double cellHeight = constraints.maxHeight / 11;
+
+              return Row(
+                children: [
+                  for (int n = start; n <= end; n++)
+                    Expanded(
+                      child: _buildTableColumn(
+                        context,
+                        n,
+                        textColor,
+                        accent,
+                        constraints.maxWidth / 5,
+                        cellHeight,
+                      ),
+                    ),
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
 
-  /// 📈 Single table column (header + 10 rows)
+  // ---------------------------------------------------------------------------
+  // RIGHT — SINGLE TABLE COLUMN WITH DYNAMIC HEIGHT
+  // ---------------------------------------------------------------------------
+
   Widget _buildTableColumn(
     BuildContext context,
     int number,
     Color textColor,
     Color accent,
     double width,
+    double cellHeight,
   ) {
     final theme = Theme.of(context);
 
-    return Container(
-      width: width,
-      decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(
-            color: theme.dividerColor.withOpacity(0.2),
-            width: 0.5,
+    return Column(
+      children: [
+        // Header cell
+        Container(
+          height: cellHeight,
+          alignment: Alignment.center,
+          color: accent.withOpacity(0.15),
+          child: Text(
+            "$number",
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.bold,
+              fontSize: cellHeight * 0.30,
+            ),
           ),
         ),
-      ),
-      child: Column(
-        children: [
-          // Header (table number)
+
+        // x1–x10 rows
+        for (int i = 1; i <= 10; i++)
           Container(
-            height: _cellHeight,
-            color: accent.withOpacity(0.15),
+            height: cellHeight,
             alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: i.isEven
+                  ? theme.colorScheme.surface.withOpacity(0.96)
+                  : theme.colorScheme.surface.withOpacity(0.90),
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.dividerColor.withOpacity(0.10),
+                  width: 0.4,
+                ),
+              ),
+            ),
             child: Text(
-              '$number',
+              "${number * i}",
               style: TextStyle(
-                color: accent,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                color: textColor,
+                fontSize: cellHeight * 0.32,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          // Rows: x1–x10
-          for (int i = 1; i <= 10; i++)
-            Container(
-              height: _cellHeight,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: i.isEven
-                    ? theme.cardColor.withOpacity(0.9)
-                    : theme.cardColor.withOpacity(0.8),
-                border: Border(
-                  bottom: BorderSide(
-                    color: theme.dividerColor.withOpacity(0.1),
-                    width: 0.4,
-                  ),
-                ),
-              ),
-              child: Text(
-                '${number * i}',
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
-  /// 🔘 Bottom chips for navigating sections (1–5, 6–10, ...)
+  // ---------------------------------------------------------------------------
+  // BOTTOM CHIPS
+  // ---------------------------------------------------------------------------
+
   Widget _buildBottomChips(Color accent, Color textColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      color: Theme.of(context).cardColor,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        border: Border(
+          top: BorderSide(color: textColor.withOpacity(0.08), width: 0.6),
+        ),
+      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
           children: groups.asMap().entries.map((entry) {
             final i = entry.key;
-            final label = entry.value['label'] as String;
-            final selected = i == selectedGroupIndex;
+            final label = entry.value['label'];
+            final bool selected = i == selectedGroupIndex;
 
             return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: ChoiceChip(
-                label: Text(label),
-                selected: selected,
-                onSelected: (_) {
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: GestureDetector(
+                onTap: () {
                   _pageController.animateToPage(
                     i,
-                    duration: const Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 260),
                     curve: Curves.easeOutCubic,
                   );
                   setState(() => selectedGroupIndex = i);
                 },
-                selectedColor: accent,
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : textColor.withOpacity(0.8),
-                  fontWeight: FontWeight.w600,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected ? accent : Colors.grey.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: selected
+                          ? Colors.white
+                          : textColor.withOpacity(0.85),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             );

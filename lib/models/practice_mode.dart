@@ -4,7 +4,6 @@ import '../features/quiz/screens/practice_overview_screen.dart';
 enum PracticeMode {
   dailyPractice,
   mixedPractice,
-
   addition,
   subtraction,
   multiplication,

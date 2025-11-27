@@ -13,6 +13,7 @@ import '../../quiz/screens/practice_quiz_entry.dart';
 import '../../quiz/screens/setup/mixed_quiz_setup_screen.dart';
 import '../../../models/practice_mode.dart';
 import '../../quiz/screens/practice_overview_screen.dart';
+import '../../quiz/screens/result_screen.dart';
 
 class PracticeBarSection extends StatefulWidget {
   const PracticeBarSection({super.key});
@@ -110,9 +111,7 @@ class _PracticeBarSectionState extends State<PracticeBarSection> {
         children: [
           // ⭐ Ranked Quiz Card
           _PracticeCard(
-            title: attemptedToday
-                ? "Today's Ranked Result"
-                : "Daily Ranked Quiz",
+            title: attemptedToday ? "Ranked Quiz Score" : "Daily Ranked Quiz",
             subtitle: attemptedToday
                 ? "Today's Score: $todayScore"
                 : "1 attempt • 150 seconds timer",
@@ -131,11 +130,40 @@ class _PracticeBarSectionState extends State<PracticeBarSection> {
                 return;
               }
 
-              // Already played today → go to leaderboard (official result)
               if (attemptedToday) {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user == null) return;
+
+                final uid = user.uid;
+                final now = DateTime.now();
+
+                final todayKey =
+                    "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+                final doc = await FirebaseFirestore.instance
+                    .collection("daily_leaderboard")
+                    .doc(todayKey)
+                    .collection("entries")
+                    .doc(uid)
+                    .get();
+
+                if (!doc.exists) return; // ✔ valid boolean check
+
+                final data = doc.data(); // ✔ CALL data() not data
+                if (data == null) return; // ✔ boolean condition
+
+                final int score = data["score"] is int
+                    ? data["score"]
+                    : (data["score"] as num?)?.toInt() ?? 0;
+
+                final int timeTaken = (data["timeTaken"] ?? 0).toInt();
+
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ResultScreen(score: score, timeTakenSeconds: timeTaken),
+                  ),
                 );
                 return;
               }

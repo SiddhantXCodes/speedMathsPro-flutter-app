@@ -206,19 +206,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
           sliver: const SliverToBoxAdapter(child: MasterBasicsSection()),
         ),
-        _sliverWideCard(
-          context,
-          title: "Practice History",
-          subtitle: "Review your past quizzes",
-          icon: Icons.history_rounded,
-          accent: Colors.teal,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AttemptsHistoryScreen()),
-            );
-          },
-        ),
 
         _sliverWideCard(
           context,

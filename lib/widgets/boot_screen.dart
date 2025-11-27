@@ -132,17 +132,7 @@ class _BootScreenState extends State<BootScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Logo fade-in
-                      AnimatedOpacity(
-                        opacity: 1,
-                        duration: const Duration(seconds: 1),
-                        child: Icon(
-                          Icons.calculate_rounded,
-                          size: 80,
-                          color: primary.withOpacity(0.9),
-                        ),
-                      ),
-
+                      // Removed LOGO — only title remains
                       const SizedBox(height: 24),
 
                       // Title

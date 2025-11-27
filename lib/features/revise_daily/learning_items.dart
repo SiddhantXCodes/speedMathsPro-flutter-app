@@ -43,17 +43,67 @@ class LearningItems {
     });
   }
 
-  static List<String> percentageExamples({int from = 1, int to = 20}) {
-    // Show percent increase/decrease examples and quick conversions
+  static List<String> percentageExamples({int from = 2, int to = 20}) {
     final List<String> out = [];
-    for (var p = from; p <= to; p++) {
-      out.add('$p% of 100 = $p');
-      out.add('$p% of 250 = ${_formatDouble(250 * p / 100)}');
-      out.add('Increase 100 by $p% → ${_formatDouble(100 * (1 + p / 100))}');
-      out.add('Decrease 100 by $p% → ${_formatDouble(100 * (1 - p / 100))}');
-      out.add('');
+
+    for (int d = from; d <= to; d++) {
+      final double percent = (1 / d) * 100;
+
+      final String mixed = _percentToMixedFraction(percent);
+      final String decimalPercent = _formatPercent(percent);
+
+      out.add("1/$d → $mixed% → $decimalPercent%");
     }
+
     return out;
+  }
+
+  /// Convert float percent to mixed fraction:
+  /// 16.66 → 16 2/3
+  static String _percentToMixedFraction(double percent) {
+    int whole = percent.floor();
+    double fractional = percent - whole;
+
+    if (fractional == 0) return whole.toString(); // e.g. "25"
+
+    // Convert fractional part to nearest a/b
+    const int maxDen = 20;
+    int bestA = 0, bestB = 1;
+    double bestError = 999;
+
+    for (int b = 1; b <= maxDen; b++) {
+      int a = (fractional * b).round();
+      double error = (fractional - a / b).abs();
+      if (error < bestError) {
+        bestError = error;
+        bestA = a;
+        bestB = b;
+      }
+    }
+
+    // reduce fraction
+    int g = _gcd(bestA, bestB);
+    bestA ~/= g;
+    bestB ~/= g;
+
+    if (bestA == 0) return whole.toString();
+
+    return "$whole ${bestA}/${bestB}";
+  }
+
+  static int _gcd(int a, int b) {
+    while (b != 0) {
+      int t = a % b;
+      a = b;
+      b = t;
+    }
+    return a.abs();
+  }
+
+  static String _formatPercent(double value) {
+    String s = value.toStringAsFixed(2);
+    s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return s;
   }
 }
 

@@ -530,7 +530,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
                     size: 22,
                   ),
                   label: Text(
-                    played ? "View Ranked Result" : "Take Today's Quiz",
+                    played ? "View Ranked Result" : "Take Today's Ranked Quiz",
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
