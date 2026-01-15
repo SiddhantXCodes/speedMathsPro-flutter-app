@@ -1,30 +1,21 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../providers/local_user_provider.dart';
-import '../app.dart';
-
-class BootScreen extends StatefulWidget {
-  final String message;
-
-  const BootScreen({super.key, required this.message});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<BootScreen> createState() => _BootScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _BootScreenState extends State<BootScreen>
+class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Timer _symbolTimer;
 
   final List<_FloatingSymbol> _symbols = [];
   final List<String> _mathChars = ["+", "-", "×", "÷", "√", "%", "π"];
-
-  final TextEditingController _nameController = TextEditingController();
-  String? _error;
 
   @override
   void initState() {
@@ -36,7 +27,7 @@ class _BootScreenState extends State<BootScreen>
     )..repeat(reverse: true);
 
     _symbolTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (_symbols.length < 12) {
+      if (_symbols.length < 12 && mounted) {
         setState(() {
           _symbols.add(
             _FloatingSymbol(
@@ -49,38 +40,12 @@ class _BootScreenState extends State<BootScreen>
         });
       }
     });
-
-    // 🔁 Auto-skip if username already exists
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = context.read<LocalUserProvider>();
-      if (user.hasUsername) {
-        _goHome();
-      }
-    });
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const SpeedMathApp()),
-    );
-  }
-
-  Future<void> _submit() async {
-    final user = context.read<LocalUserProvider>();
-
-    try {
-      await user.setUsername(_nameController.text);
-      _goHome();
-    } catch (e) {
-      setState(() => _error = "Enter at least 3 characters");
-    }
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _symbolTimer.cancel();
-    _nameController.dispose();
     super.dispose();
   }
 
@@ -94,7 +59,6 @@ class _BootScreenState extends State<BootScreen>
         builder: (_, __) {
           return Stack(
             children: [
-              // Background
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -130,45 +94,8 @@ class _BootScreenState extends State<BootScreen>
                 );
               }),
 
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "Welcome to SpeedMaths Pro",
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      TextField(
-                        controller: _nameController,
-                        textAlign: TextAlign.center,
-                        maxLength: 15,
-                        decoration: InputDecoration(
-                          hintText: "Enter your username",
-                          errorText: _error,
-                          counterText: "",
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      ElevatedButton(
-                        onPressed: _submit,
-                        child: const Text("Continue"),
-                      ),
-                    ],
-                  ),
-                ),
+              const Center(
+                child: CircularProgressIndicator(),
               ),
             ],
           );

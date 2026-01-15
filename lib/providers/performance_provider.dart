@@ -2,23 +2,19 @@
 import 'package:flutter/material.dart';
 import '../services/hive_service.dart';
 
-
 class PerformanceProvider extends ChangeNotifier {
- PerformanceProvider() {
-  _init();
-}
-
+  // --------------------------------------------------------------------------
+  // CONSTRUCTOR (NO AUTO INIT)
+  // --------------------------------------------------------------------------
+  PerformanceProvider();
 
   // --------------------------------------------------------------------------
   // STATE
   // --------------------------------------------------------------------------
   Map<DateTime, int> _dailyScores = {}; // ranked trend only (date → score)
- 
 
-  bool initialized = false;
- 
-
-
+  bool _initialized = false;
+  bool get initialized => _initialized;
 
   int? _bestScore;
 
@@ -27,10 +23,7 @@ class PerformanceProvider extends ChangeNotifier {
   // --------------------------------------------------------------------------
   Map<DateTime, int> get dailyScores => _dailyScores;
 
-  bool get loading => !initialized;
-
-
-
+  bool get loading => !_initialized;
 
   int? get bestScore => _bestScore;
 
@@ -56,20 +49,21 @@ class PerformanceProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------------------
-  // INIT
+  // INIT — CALLED FROM main.dart
   // --------------------------------------------------------------------------
-  Future<void> _init() async {
+  Future<void> init() async {
+    if (_initialized) return;
+
     await reloadAll();
-    initialized = true;
+    _initialized = true;
     notifyListeners();
   }
 
   // --------------------------------------------------------------------------
-  // LOCAL RANKED SCORES — NEW SYSTEM
+  // LOCAL RANKED SCORES
   // --------------------------------------------------------------------------
   Future<void> loadFromLocal({bool force = false}) async {
     try {
-      // Read from new Hive box: ranked_scores
       final ranked = HiveService.getRankedScores();
 
       _dailyScores = {
@@ -77,55 +71,49 @@ class PerformanceProvider extends ChangeNotifier {
           DateTime(e.date.year, e.date.month, e.date.day): e.score,
       };
 
-      // Best ranked score (local)
       if (ranked.isEmpty) {
         _bestScore = 0;
       } else {
-        _bestScore = ranked.map((e) => e.score).reduce((a, b) => a > b ? a : b);
+        _bestScore =
+            ranked.map((e) => e.score).reduce((a, b) => a > b ? a : b);
       }
-
-      notifyListeners();
     } catch (e) {
       debugPrint("⚠️ loadFromLocal error: $e");
     }
   }
 
- 
   // --------------------------------------------------------------------------
   // RELOAD EVERYTHING
   // --------------------------------------------------------------------------
-Future<void> reloadAll() async {
-  try {
-    await loadFromLocal();
-    notifyListeners();
-  } catch (e) {
-    debugPrint("⚠️ reloadAll error: $e");
+  Future<void> reloadAll() async {
+    try {
+      await loadFromLocal();
+    } catch (e) {
+      debugPrint("⚠️ reloadAll error: $e");
+    }
   }
-}
 
   // --------------------------------------------------------------------------
   // RESET
   // --------------------------------------------------------------------------
- Future<void> resetAll() async {
-  _dailyScores.clear();
-  _bestScore = null;
+  Future<void> resetAll() async {
+    _dailyScores.clear();
+    _bestScore = null;
 
+    try {
+      await HiveService.clearRankedScores();
+    } catch (e) {
+      debugPrint("⚠️ resetAll error: $e");
+    }
 
-  try {
-    // Clear LOCAL ranked scores only
-    await HiveService.clearRankedScores();
-  } catch (e) {
-    debugPrint("⚠️ resetAll error: $e");
+    notifyListeners();
   }
-
-  notifyListeners();
-}
 
   // --------------------------------------------------------------------------
   // TEST SUPPORT
   // --------------------------------------------------------------------------
   void testMarkInitialized() {
-    initialized = true;
+    _initialized = true;
     notifyListeners();
   }
 }

@@ -4,39 +4,31 @@ import 'package:flutter/material.dart';
 import '../models/practice_log.dart';
 import '../features/practice/practice_repository.dart';
 
-/// 🧠 PracticeLogProvider — OFFLINE ONLY
-///
-/// Responsibilities:
-/// • Load practice logs from Hive
-/// • Expose logs to UI
-/// • Maintain activity map for heatmap
-/// • Add new practice sessions
 class PracticeLogProvider extends ChangeNotifier {
   final PracticeRepository _repository;
 
   List<PracticeLog> _logs = [];
   List<PracticeLog> get logs => _logs;
 
-  /// 🌟 HomeScreen waits for this
-  bool initialized = false;
+  bool _initialized = false;
+  bool get initialized => _initialized;
 
-  /// 🔥 In-memory activity map (fast + correct)
   Map<DateTime, int> _activityMap = {};
   Map<DateTime, int> get activityMap => _activityMap;
 
   // --------------------------------------------------------------
-  // CONSTRUCTOR
+  // CONSTRUCTOR (NO AUTO INIT)
   // --------------------------------------------------------------
-  PracticeLogProvider() : _repository = PracticeRepository() {
-    _init();
-  }
+  PracticeLogProvider() : _repository = PracticeRepository();
 
   // --------------------------------------------------------------
-  // INIT — load before HomeScreen renders
+  // PUBLIC INIT (CALLED FROM main.dart)
   // --------------------------------------------------------------
-  Future<void> _init() async {
+  Future<void> init() async {
+    if (_initialized) return;
+
     await loadLogs();
-    initialized = true;
+    _initialized = true;
     notifyListeners();
   }
 
@@ -46,11 +38,10 @@ class PracticeLogProvider extends ChangeNotifier {
   Future<void> loadLogs() async {
     _logs = _repository.getAllLocalSessions();
     _activityMap = _repository.getActivityMapFromHive();
-    notifyListeners();
   }
 
   // --------------------------------------------------------------
-  // ADD PRACTICE SESSION (OFFLINE)
+  // ADD PRACTICE SESSION
   // --------------------------------------------------------------
   Future<void> addSession({
     required String topic,
@@ -64,88 +55,28 @@ class PracticeLogProvider extends ChangeNotifier {
     List<Map<String, dynamic>>? questions,
     Map<int, String>? userAnswers,
   }) async {
-    try {
-      final log = PracticeLog(
-        date: DateTime.now(),
-        topic: topic,
-        category: category,
-        correct: correct,
-        incorrect: incorrect,
-        score: score,
-        total: total,
-        avgTime: avgTime,
-        timeSpentSeconds: timeSpentSeconds,
-        questions: questions ?? [],
-        userAnswers: userAnswers ?? {},
-      );
-
-      await _repository.savePracticeSession(log);
-
-      _logs.add(log);
-
-      // 🔥 Update heatmap instantly
-      final day = DateTime(log.date.year, log.date.month, log.date.day);
-      _activityMap[day] = (_activityMap[day] ?? 0) + 1;
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint("⚠️ Failed to add practice session: $e");
-    }
-  }
-
-  // --------------------------------------------------------------
-  // DAY SUMMARY (USED BY UI)
-  // --------------------------------------------------------------
-  Map<String, dynamic>? getDaySummary(DateTime date) {
-    final key = DateTime(date.year, date.month, date.day);
-
-    final dayLogs = _logs.where(
-      (log) =>
-          log.date.year == key.year &&
-          log.date.month == key.month &&
-          log.date.day == key.day,
+    final log = PracticeLog(
+      date: DateTime.now(),
+      topic: topic,
+      category: category,
+      correct: correct,
+      incorrect: incorrect,
+      score: score,
+      total: total,
+      avgTime: avgTime,
+      timeSpentSeconds: timeSpentSeconds,
+      questions: questions ?? [],
+      userAnswers: userAnswers ?? {},
     );
 
-    if (dayLogs.isEmpty) return null;
+    await _repository.savePracticeSession(log);
 
-    int totalCorrect = 0;
-    int totalIncorrect = 0;
-    double totalTime = 0;
+    _logs.add(log);
 
-    for (final log in dayLogs) {
-      totalCorrect += log.correct;
-      totalIncorrect += log.incorrect;
-      totalTime += log.avgTime;
-    }
+    final day = DateTime(log.date.year, log.date.month, log.date.day);
+    _activityMap[day] = (_activityMap[day] ?? 0) + 1;
 
-    return {
-      'sessions': dayLogs.length,
-      'correct': totalCorrect,
-      'incorrect': totalIncorrect,
-      'avgTime': totalTime / dayLogs.length,
-    };
-  }
-
-  // --------------------------------------------------------------
-  // UNIFIED HISTORY LIST (USED BY ATTEMPTS SCREEN)
-  // --------------------------------------------------------------
-  List<Map<String, dynamic>> getAllSessions() {
-    return _logs.map((log) {
-      return {
-        'source': 'offline',
-        'date': log.date,
-        'topic': log.topic,
-        'category': log.category,
-        'correct': log.correct,
-        'incorrect': log.incorrect,
-        'total': log.total,
-        'score': log.score,
-        'timeSpentSeconds': log.timeSpentSeconds,
-        'questions': log.questions,
-        'userAnswers': log.userAnswers,
-        'raw': log,
-      };
-    }).toList();
+    notifyListeners();
   }
 
   // --------------------------------------------------------------
@@ -157,12 +88,26 @@ class PracticeLogProvider extends ChangeNotifier {
     _activityMap.clear();
     notifyListeners();
   }
+  // --------------------------------------------------------------
+// UNIFIED HISTORY LIST (USED BY ATTEMPTS / HISTORY SCREENS)
+// --------------------------------------------------------------
+List<Map<String, dynamic>> getAllSessions() {
+  return _logs.map((log) {
+    return {
+      'source': 'offline',
+      'date': log.date,
+      'topic': log.topic,
+      'category': log.category,
+      'correct': log.correct,
+      'incorrect': log.incorrect,
+      'total': log.total,
+      'score': log.score,
+      'timeSpentSeconds': log.timeSpentSeconds,
+      'questions': log.questions,
+      'userAnswers': log.userAnswers,
+      'raw': log,
+    };
+  }).toList();
+}
 
-  // --------------------------------------------------------------
-  // TEST HELPER
-  // --------------------------------------------------------------
-  void testMarkInitialized() {
-    initialized = true;
-    notifyListeners();
-  }
 }

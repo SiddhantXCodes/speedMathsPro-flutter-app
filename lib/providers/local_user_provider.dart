@@ -11,17 +11,23 @@ class LocalUserProvider extends ChangeNotifier {
 
   late Box _box;
 
-  bool get initialized => _initialized;
+  // -------------------------
+  // GETTERS
+  // -------------------------
+
+  bool get isInitialized => _initialized;
+  bool get hasUsername => _username != null && _username!.isNotEmpty;
+
   String get username => _username ?? "";
   String get deviceId => _deviceId ?? "";
 
-  bool get hasUsername => _username != null && _username!.isNotEmpty;
+  // -------------------------
+  // INIT (CALL ON APP START)
+  // -------------------------
 
-  LocalUserProvider() {
-    _init();
-  }
+  Future<void> init() async {
+    if (_initialized) return; // 🔐 safety
 
-  Future<void> _init() async {
     _box = await Hive.openBox(_boxName);
 
     _username = _box.get('username');
@@ -36,26 +42,39 @@ class LocalUserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -------------------------
+  // USERNAME ACTIONS
+  // -------------------------
+
   Future<void> setUsername(String name) async {
     final clean = name.trim();
 
     if (clean.length < 3) {
-      throw Exception("Username too short");
+      throw Exception("Username must be at least 3 characters");
     }
 
     _username = clean;
     await _box.put('username', clean);
+
     notifyListeners();
   }
 
   Future<void> clearUsername() async {
     _username = null;
     await _box.delete('username');
+
     notifyListeners();
   }
 
+  // -------------------------
+  // INTERNAL HELPERS
+  // -------------------------
+
   String _generateDeviceId() {
     final rnd = Random();
-    return List.generate(12, (_) => rnd.nextInt(16).toRadixString(16)).join();
+    return List.generate(
+      12,
+      (_) => rnd.nextInt(16).toRadixString(16),
+    ).join();
   }
 }

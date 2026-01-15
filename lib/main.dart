@@ -5,9 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 
 import 'services/app_initializer.dart';
-import 'widgets/boot_screen.dart';
 import 'services/sync_manager.dart';
-import 'app.dart';
 
 // Providers
 import 'providers/theme_provider.dart';
@@ -15,88 +13,73 @@ import 'providers/practice_log_provider.dart';
 import 'providers/performance_provider.dart';
 import 'providers/local_user_provider.dart';
 
+// App theme
+import 'theme/app_theme.dart';
+
+// Root gate
+import 'root_gate.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const BootApp());
+
+  // 🔥 App-wide initialization (Hive, Firebase, boxes)
+  await AppInitializer.ensureInitialized((_) {});
+
+  // 🔥 Create providers
+  final themeProvider = ThemeProvider();
+  final practiceProvider = PracticeLogProvider();
+  final performanceProvider = PerformanceProvider();
+  final localUserProvider = LocalUserProvider();
+
+  // 🔥 Explicit provider initialization
+  await Future.wait([
+    practiceProvider.init(),
+    performanceProvider.init(),
+    localUserProvider.init(),
+  ]);
+
+  // 🔥 Sync offline data (non-blocking)
+  SyncManager().syncPendingSessions();
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: themeProvider),
+        ChangeNotifierProvider.value(value: practiceProvider),
+        ChangeNotifierProvider.value(value: performanceProvider),
+        ChangeNotifierProvider.value(value: localUserProvider),
+      ],
+      child: const SpeedMathRootApp(),
+    ),
+  );
 }
 
-class BootApp extends StatefulWidget {
-  const BootApp({super.key});
-
-  @override
-  State<BootApp> createState() => _BootAppState();
-}
-
-class _BootAppState extends State<BootApp> {
-  bool _isReady = false;
-  String _message = "Initializing…";
-
-  late final ThemeProvider _themeProvider;
-  late final PracticeLogProvider _practiceProvider;
-  late final PerformanceProvider _performanceProvider;
-  late final LocalUserProvider _localUserProvider;
-
-  @override
-  void initState() {
-    super.initState();
-    _initialize();
-  }
-
-  Future<void> _initialize() async {
-    try {
-      await AppInitializer.ensureInitialized((status) {
-        if (mounted) _message = status;
-      });
-
-      _themeProvider = ThemeProvider();
-      _practiceProvider = PracticeLogProvider();
-      _performanceProvider = PerformanceProvider();
-      _localUserProvider = LocalUserProvider();
-
-      int retries = 0;
-      while ((!_practiceProvider.initialized ||
-              !_performanceProvider.initialized ||
-              !_localUserProvider.initialized) &&
-          retries < 60) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        retries++;
-      }
-
-      await SyncManager().syncPendingSessions();
-
-      if (mounted) setState(() => _isReady = true);
-    } catch (e) {
-      if (mounted) _message = "❌ Initialization failed";
-    }
-  }
-
-  @override
-  void dispose() {
-    SyncManager().stop();
-    super.dispose();
-  }
+///
+/// Root MaterialApp wrapper (SINGLE SOURCE OF TRUTH)
+///
+class SpeedMathRootApp extends StatelessWidget {
+  const SpeedMathRootApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (!_isReady) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: BootScreen(message: _message),
-      );
-    }
+    return ScreenUtilInit(
+      designSize: const Size(390, 844),
+      minTextAdapt: true,
+      builder: (_, __) {
+        final themeProvider = context.watch<ThemeProvider>();
 
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: _themeProvider),
-        ChangeNotifierProvider.value(value: _practiceProvider),
-        ChangeNotifierProvider.value(value: _performanceProvider),
-        ChangeNotifierProvider.value(value: _localUserProvider),
-      ],
-      child: ScreenUtilInit(
-        designSize: const Size(390, 844),
-        minTextAdapt: true,
-        builder: (_, __) => const SpeedMathApp(),
-      ),
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'SpeedMath Pro',
+
+          // 🌙 THEME HANDLING (CORRECT PLACE)
+          themeMode: themeProvider.themeMode,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+
+          home: const RootGate(),
+        );
+      },
     );
   }
 }
