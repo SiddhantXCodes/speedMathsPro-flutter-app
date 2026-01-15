@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/local_user_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../../theme/app_theme.dart';
-import '../../profile_screen.dart';
+import '../../profile/profile_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});

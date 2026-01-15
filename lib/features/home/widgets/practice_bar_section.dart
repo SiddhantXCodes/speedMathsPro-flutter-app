@@ -10,6 +10,7 @@ import '../../quiz/screens/daily_ranked_quiz_entry.dart';
 import '../../quiz/widgets/quiz_entry_popup.dart';
 import '../../quiz/screens/practice_quiz_entry.dart';
 import '../../quiz/screens/setup/mixed_quiz_setup_screen.dart';
+import '../../quiz/screens/result_screen.dart';
 
 class PracticeBarSection extends StatefulWidget {
   const PracticeBarSection({super.key});

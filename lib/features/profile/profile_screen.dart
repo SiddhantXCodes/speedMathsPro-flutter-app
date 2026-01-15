@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../theme/app_theme.dart';
-import '../../providers/theme_provider.dart';
-import '../../providers/local_user_provider.dart';
-import '../../services/hive_service.dart';
-
+import '../../../theme/app_theme.dart';
+import '../../../providers/theme_provider.dart';
+import '../../../providers/local_user_provider.dart';
+import '../../../services/hive_service.dart';
+import 'user_repository.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -129,10 +129,15 @@ class ProfileScreen extends StatelessWidget {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async{
               final name = ctrl.text.trim();
               if (name.length >= 3) {
-                user.setUsername(name);
+                await user.setUsername(name);
+                 // 2️⃣ Sync to Firebase (best effort)
+              await UserRepository().updateUsername(
+                userId: user.deviceId,
+                username: name,
+              );
               }
               Navigator.pop(context);
             },

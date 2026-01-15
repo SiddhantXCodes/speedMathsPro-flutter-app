@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../providers/theme_provider.dart';
 import '../../../providers/local_user_provider.dart';
-
+import '../../profile/profile_screen.dart';
 /// 🔝 App-wide TopBar shown on HomeScreen.
 class TopBar extends StatelessWidget {
   const TopBar({super.key});
@@ -65,7 +65,13 @@ class TopBar extends StatelessWidget {
           builder: (scaffoldContext) => Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: () => Scaffold.of(scaffoldContext).openDrawer(),
+              onTap: () {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const ProfileScreen(),
+    ),
+  );
+},
               child: CircleAvatar(
                 radius: 18,
                 backgroundColor: accent.withOpacity(0.15),
