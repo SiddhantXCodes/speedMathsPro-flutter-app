@@ -1,4 +1,5 @@
-//lib/features/performance/widgets/performance_heatmap.dart
+// lib/features/performance/widgets/performance_heatmap.dart
+
 import 'package:flutter/material.dart';
 import '../../home/widgets/heatmap_section.dart';
 import '../../../providers/practice_log_provider.dart';
@@ -9,14 +10,21 @@ class PerformanceHeatmap extends StatelessWidget {
   final PerformanceProvider perf;
   final PracticeLogProvider log;
 
-  const PerformanceHeatmap({super.key, required this.perf, required this.log});
+  const PerformanceHeatmap({
+    super.key,
+    required this.perf,
+    required this.log,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = AppTheme.adaptiveText(context);
 
-    final offlineMap = log.getActivityMap();
+    // ✅ FIX: use getter, not method
+    final offlineMap = log.activityMap;
+
+    // Ranked = 1 activity per day
     final onlineMap = Map<DateTime, int>.fromEntries(
       perf.dailyScores.keys.map((d) => MapEntry(d, 1)),
     );
@@ -36,7 +44,6 @@ class PerformanceHeatmap extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // ✅ Matches the new HeatmapSection constructor
         HeatmapSection(
           isDarkMode: isDark,
           activity: merged,
@@ -46,19 +53,22 @@ class PerformanceHeatmap extends StatelessWidget {
     );
   }
 
-  /// 🧩 Merge Offline + Online Maps
+  /// 🧩 Merge Offline + Ranked maps
   Map<DateTime, int> _mergeActivity(
     Map<DateTime, int> offline,
     Map<DateTime, int> online,
   ) {
     final merged = Map<DateTime, int>.from(offline);
+
     for (final e in online.entries) {
       merged[e.key] = (merged[e.key] ?? 0) + e.value;
     }
+
+    // clamp intensity for UI
     return merged.map((k, v) => MapEntry(k, v.clamp(0, 5)));
   }
 
-  /// 🎨 GitHub-like color scale
+  /// 🎨 GitHub-style heatmap colors
   Color _colorForValue(int v) {
     switch (v.clamp(0, 4)) {
       case 0:

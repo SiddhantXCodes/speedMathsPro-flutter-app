@@ -4,49 +4,44 @@ import 'package:flutter/material.dart';
 import '../models/practice_log.dart';
 import '../features/practice/practice_repository.dart';
 
-/// 🧠 PracticeLogProvider — Bridges UI ↔ Repository
-/// FIXED: Adds `initialized` flag so HomeScreen waits until data loads.
+/// 🧠 PracticeLogProvider — OFFLINE ONLY
+///
+/// Responsibilities:
+/// • Load practice logs from Hive
+/// • Expose logs to UI
+/// • Maintain activity map for heatmap
+/// • Add new practice sessions
 class PracticeLogProvider extends ChangeNotifier {
   final PracticeRepository _repository;
 
   List<PracticeLog> _logs = [];
   List<PracticeLog> get logs => _logs;
 
-  bool _isSyncing = false;
-  bool get isSyncing => _isSyncing;
-
-  /// 🌟 MAIN FIX → HomeScreen waits for this
+  /// 🌟 HomeScreen waits for this
   bool initialized = false;
 
-  /// 🌟 In-memory activity map (fast + correct)
+  /// 🔥 In-memory activity map (fast + correct)
   Map<DateTime, int> _activityMap = {};
   Map<DateTime, int> get activityMap => _activityMap;
 
   // --------------------------------------------------------------
-  // 🔥 NORMAL CONSTRUCTOR (Production)
+  // CONSTRUCTOR
   // --------------------------------------------------------------
   PracticeLogProvider() : _repository = PracticeRepository() {
-    _init(); // async load
+    _init();
   }
 
   // --------------------------------------------------------------
-  // 🧪 TEST CONSTRUCTOR (Accepts mock repository)
-  // --------------------------------------------------------------
-  PracticeLogProvider.test(this._repository) {
-    initialized = true; // Immediately mark as initialized for tests
-  }
-
-  // --------------------------------------------------------------
-  // 🔥 FIX: Load logs BEFORE HomeScreen builds its heatmap
+  // INIT — load before HomeScreen renders
   // --------------------------------------------------------------
   Future<void> _init() async {
     await loadLogs();
-    initialized = true; // <-- MAIN FIX
-    notifyListeners(); // notify after complete load
+    initialized = true;
+    notifyListeners();
   }
 
   // --------------------------------------------------------------
-  // 📦 Load all local logs (Hive)
+  // LOAD ALL LOGS (Hive)
   // --------------------------------------------------------------
   Future<void> loadLogs() async {
     _logs = _repository.getAllLocalSessions();
@@ -55,7 +50,7 @@ class PracticeLogProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------
-  // ➕ Add new session (offline-first)
+  // ADD PRACTICE SESSION (OFFLINE)
   // --------------------------------------------------------------
   Future<void> addSession({
     required String topic,
@@ -99,31 +94,7 @@ class PracticeLogProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------
-  // 🔄 Sync pending logs to Firebase
-  // --------------------------------------------------------------
-  Future<void> syncPending() async {
-    if (_isSyncing) return;
-
-    _isSyncing = true;
-    notifyListeners();
-
-    try {
-      await _repository.syncPendingSessions();
-    } catch (e) {
-      debugPrint("⚠️ Practice sync failed: $e");
-    }
-
-    _isSyncing = false;
-    notifyListeners();
-  }
-
-  // --------------------------------------------------------------
-  // 🗓 Activity map
-  // --------------------------------------------------------------
-  Map<DateTime, int> getActivityMap() => _activityMap;
-
-  // --------------------------------------------------------------
-  // 📊 Day summary
+  // DAY SUMMARY (USED BY UI)
   // --------------------------------------------------------------
   Map<String, dynamic>? getDaySummary(DateTime date) {
     final key = DateTime(date.year, date.month, date.day);
@@ -156,7 +127,7 @@ class PracticeLogProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------
-  // 📜 Unified list for history
+  // UNIFIED HISTORY LIST (USED BY ATTEMPTS SCREEN)
   // --------------------------------------------------------------
   List<Map<String, dynamic>> getAllSessions() {
     return _logs.map((log) {
@@ -178,20 +149,20 @@ class PracticeLogProvider extends ChangeNotifier {
   }
 
   // --------------------------------------------------------------
-  // 🧪 Test helper (manual initialization control)
-  // --------------------------------------------------------------
-  void testMarkInitialized() {
-    initialized = true;
-    notifyListeners();
-  }
-
-  // --------------------------------------------------------------
-  // 🧹 Clear all local practice logs
+  // CLEAR ALL PRACTICE DATA
   // --------------------------------------------------------------
   Future<void> clearAll() async {
     await _repository.clearAllLocalData();
     _logs.clear();
     _activityMap.clear();
+    notifyListeners();
+  }
+
+  // --------------------------------------------------------------
+  // TEST HELPER
+  // --------------------------------------------------------------
+  void testMarkInitialized() {
+    initialized = true;
     notifyListeners();
   }
 }

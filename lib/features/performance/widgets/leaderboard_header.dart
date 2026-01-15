@@ -1,4 +1,3 @@
-//lib/features/performance/widgets/leaderboard_header.dart
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 import '../../../providers/performance_provider.dart';
@@ -6,18 +5,29 @@ import '../../../providers/performance_provider.dart';
 class LeaderboardHeader extends StatelessWidget {
   final PerformanceProvider provider;
 
-  const LeaderboardHeader({super.key, required this.provider});
+  const LeaderboardHeader({
+    super.key,
+    required this.provider,
+  });
 
   @override
   Widget build(BuildContext context) {
     final accent = AppTheme.adaptiveAccent(context);
     final isLoading = !provider.initialized;
 
+    // 🧠 Today score (local ranked)
+    final todayKey = DateTime.now();
+    final today = DateTime(todayKey.year, todayKey.month, todayKey.day);
+    final todayScore = provider.dailyScores[today] ?? 0;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [accent.withOpacity(0.92), accent.withOpacity(0.78)],
+          colors: [
+            accent.withOpacity(0.92),
+            accent.withOpacity(0.78),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -37,7 +47,7 @@ class LeaderboardHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Leaderboard Summary",
+                  "Ranked Performance",
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -46,17 +56,17 @@ class LeaderboardHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                /// 🟦 Rank summary row
+                /// 🟦 Local performance summary
                 Row(
                   children: [
                     _pill(
                       label: "Today",
-                      value: provider.todayRank?.toString() ?? "--",
+                      value: todayScore > 0 ? "$todayScore pts" : "--",
                     ),
                     const SizedBox(width: 8),
                     _pill(
-                      label: "All-time",
-                      value: provider.allTimeRank?.toString() ?? "--",
+                      label: "Weekly Avg",
+                      value: "${provider.weeklyAverage} pts",
                     ),
                     const SizedBox(width: 8),
                     _pill(
@@ -70,8 +80,11 @@ class LeaderboardHeader extends StatelessWidget {
     );
   }
 
-  /// 🟩 Pill Chip
-  Widget _pill({required String label, required String value}) {
+  /// 🟩 Stat Pill
+  Widget _pill({
+    required String label,
+    required String value,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(

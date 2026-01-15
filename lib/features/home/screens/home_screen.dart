@@ -7,13 +7,14 @@ import '../../../app.dart';
 import '../../../providers/performance_provider.dart';
 import '../../../providers/practice_log_provider.dart';
 import '../../../theme/app_theme.dart';
-
+import '../../../providers/local_user_provider.dart';
 import '../widgets/practice_bar_section.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/quick_stats.dart';
 import '../widgets/heatmap_section.dart';
 import '../widgets/master_basics_section.dart';
-import '../../../features/auth/auth_provider.dart';
+import '../widgets/app_drawer.dart';
+
 import '../../performance/screens/performance_screen.dart';
 import '../../practice/screens/attempts_history_screen.dart';
 import '../../revise_daily/screens/learn_daily_screen.dart';
@@ -28,33 +29,23 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool _isRefreshing = false;
-  VoidCallback? _authListener;
+  
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    routeObserver.subscribe(this, ModalRoute.of(context)!);
+ @override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+  routeObserver.subscribe(this, ModalRoute.of(context)!);
 
-    if (_authListener == null) {
-      final auth = context.read<AuthProvider>();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _refreshActivityData();
+  });
+}
 
-      _authListener = () => _refreshActivityData();
-      auth.addListener(_authListener!);
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _refreshActivityData();
-      });
-    }
-  }
 
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
-    try {
-      if (_authListener != null) {
-        context.read<AuthProvider>().removeListener(_authListener!);
-      }
-    } catch (_) {}
+
     super.dispose();
   }
 
@@ -127,6 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         preferredSize: Size.fromHeight(56),
         child: TopBar(),
       ),
+     drawer: isBigTablet ? null : const AppDrawer(),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshActivityData,
@@ -432,40 +424,40 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   // =============================================================
   // Welcome Section
   // =============================================================
-  Widget _buildWelcomeSection(BuildContext context) {
-    final theme = Theme.of(context);
-    final auth = context.watch<AuthProvider>();
+ Widget _buildWelcomeSection(BuildContext context) {
+  final theme = Theme.of(context);
+  final user = context.watch<LocalUserProvider>();
 
-    final hour = DateTime.now().hour;
+  final hour = DateTime.now().hour;
 
-    final greeting = hour < 12
-        ? "Good morning"
-        : hour < 17
-        ? "Good afternoon"
-        : "Good evening";
+  final greeting = hour < 12
+      ? "Good morning"
+      : hour < 17
+          ? "Good afternoon"
+          : "Good evening";
 
-    final name = (auth.user?.displayName ?? "").split(" ").first.trim();
+  final name = user.username ?? "";
 
-    final line = name.isEmpty ? "$greeting 👋" : "$greeting, $name 👋";
+  final line = name.isEmpty ? "$greeting 👋" : "$greeting, $name 👋";
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          line,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.primary,
-          ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        line,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: theme.colorScheme.primary,
         ),
-        const SizedBox(height: 4),
-        Text(
-          "Let’s boost your math speed today!",
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-        ),
-      ],
-    );
-  }
+      ),
+      const SizedBox(height: 4),
+      Text(
+        "Let’s boost your math speed today!",
+        style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+      ),
+    ],
+  );
+}
 
   // =============================================================
   // Feature Card (private)

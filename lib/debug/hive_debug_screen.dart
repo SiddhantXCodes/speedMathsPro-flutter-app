@@ -1,10 +1,11 @@
+// lib/debug/hive_debug_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../theme/app_theme.dart';
-import '../services/hive_boxes.dart';
 
-/// 🐝 In-App Debug Viewer for Hive Data
-/// Lets you inspect all open Hive boxes and their contents.
+/// 🐝 Hive Debug Screen
+/// Shows ONLY active Hive boxes from the new architecture
 class HiveDebugScreen extends StatefulWidget {
   const HiveDebugScreen({super.key});
 
@@ -13,78 +14,83 @@ class HiveDebugScreen extends StatefulWidget {
 }
 
 class _HiveDebugScreenState extends State<HiveDebugScreen> {
-  late List<Box> _openBoxes;
+  final List<Box> _openBoxes = [];
 
   @override
   void initState() {
     super.initState();
-    _loadOpenBoxes();
+    _loadBoxes();
   }
 
-  void _loadOpenBoxes() {
-    _openBoxes = [
-      HiveBoxes.userProfileBox,
-      HiveBoxes.userSettingsBox,
-      HiveBoxes.practiceLogBox,
-      HiveBoxes.questionHistoryBox,
-      HiveBoxes.dailyScoreBox,
-      HiveBoxes.streakData,
-      HiveBoxes.dailyQuizMeta,
-      HiveBoxes.leaderboardCacheBox,
-      HiveBoxes.syncQueueBox,
-    ];
+  void _loadBoxes() {
+    _openIfExists('practice_logs');
+    _openIfExists('question_history');
+    _openIfExists('practice_scores');
+    _openIfExists('mixed_scores');
+    _openIfExists('ranked_scores');
+    _openIfExists('topic_scores');
+    _openIfExists('activity_data');
+    _openIfExists('sync_queue'); // ranked leaderboard only
+  }
+
+  void _openIfExists(String name) {
+    if (Hive.isBoxOpen(name)) {
+      _openBoxes.add(Hive.box(name));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final textColor = AppTheme.adaptiveText(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("🐝 Hive Data Debugger"),
+        title: const Text("🐝 Hive Debugger"),
         backgroundColor: theme.colorScheme.primary,
       ),
       backgroundColor: theme.scaffoldBackgroundColor,
       body: _openBoxes.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
-                "No boxes currently open.\nMake sure HiveBoxes.init() is called.",
+                "No Hive boxes are open.\nMake sure Hive.initFlutter() ran.",
                 textAlign: TextAlign.center,
+                style: TextStyle(color: textColor),
               ),
             )
           : ListView.builder(
-              itemCount: _openBoxes.length,
               padding: const EdgeInsets.all(12),
+              itemCount: _openBoxes.length,
               itemBuilder: (context, index) {
                 final box = _openBoxes[index];
-                final entries = box.keys.map((key) {
-                  final value = box.get(key);
-                  return _buildEntryCard(theme, key, value);
-                }).toList();
 
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  color: theme.cardColor,
                   elevation: 3,
+                  margin: const EdgeInsets.only(bottom: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: ExpansionTile(
                     title: Text(
-                      '📦 ${box.name} (${box.length} entries)',
+                      "📦 ${box.name} (${box.length})",
                       style: theme.textTheme.titleMedium,
                     ),
-                    children: entries.isNotEmpty
-                        ? entries
-                        : [
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
+                    children: box.isEmpty
+                        ? const [
+                            Padding(
+                              padding: EdgeInsets.all(12),
                               child: Text(
-                                "No data in this box yet.",
-                                style: TextStyle(fontStyle: FontStyle.italic),
+                                "Box is empty",
+                                style: TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
                             ),
-                          ],
+                          ]
+                        : box.keys.map((key) {
+                            final value = box.get(key);
+                            return _entry(theme, key, value);
+                          }).toList(),
                   ),
                 );
               },
@@ -92,15 +98,15 @@ class _HiveDebugScreenState extends State<HiveDebugScreen> {
     );
   }
 
-  Widget _buildEntryCard(ThemeData theme, dynamic key, dynamic value) {
+  Widget _entry(ThemeData theme, dynamic key, dynamic value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Container(
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.25),
           borderRadius: BorderRadius.circular(12),
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.2),
         ),
-        padding: const EdgeInsets.all(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -110,12 +116,10 @@ class _HiveDebugScreenState extends State<HiveDebugScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
-              "📄 Value: $value",
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              "📄 Value:\n$value",
+              style: theme.textTheme.bodySmall,
             ),
           ],
         ),

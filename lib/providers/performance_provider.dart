@@ -1,41 +1,25 @@
 // lib/providers/performance_provider.dart
-
 import 'package:flutter/material.dart';
 import '../services/hive_service.dart';
-import '../features/performance/performance_repository.dart';
+
 
 class PerformanceProvider extends ChangeNotifier {
-  late final PerformanceRepository _repository;
+ PerformanceProvider() {
+  _init();
+}
 
-  // --------------------------------------------------------------------------
-  // NORMAL CONSTRUCTOR
-  // --------------------------------------------------------------------------
-  PerformanceProvider() {
-    _repository = PerformanceRepository();
-    _init();
-  }
-
-  // --------------------------------------------------------------------------
-  // TEST CONSTRUCTOR
-  // --------------------------------------------------------------------------
-  PerformanceProvider.test(PerformanceRepository mockRepo) {
-    _repository = mockRepo;
-    initialized = true;
-    notifyListeners();
-  }
 
   // --------------------------------------------------------------------------
   // STATE
   // --------------------------------------------------------------------------
   Map<DateTime, int> _dailyScores = {}; // ranked trend only (date → score)
-  Map<String, dynamic>? _leaderboardData;
+ 
 
   bool initialized = false;
-  bool _isLoadingLeaderboard = false;
+ 
 
-  int _currentStreak = 0;
-  int? _todayRank;
-  int? _allTimeRank;
+
+
   int? _bestScore;
 
   // --------------------------------------------------------------------------
@@ -43,15 +27,11 @@ class PerformanceProvider extends ChangeNotifier {
   // --------------------------------------------------------------------------
   Map<DateTime, int> get dailyScores => _dailyScores;
 
-  Map<String, dynamic>? get leaderboardData => _leaderboardData;
-
-  bool get isLoadingLeaderboard => _isLoadingLeaderboard;
   bool get loading => !initialized;
 
-  int get currentStreak => _currentStreak;
 
-  int? get todayRank => _todayRank;
-  int? get allTimeRank => _allTimeRank;
+
+
   int? get bestScore => _bestScore;
 
   /// Weekly average from ranked_scores only
@@ -110,82 +90,36 @@ class PerformanceProvider extends ChangeNotifier {
     }
   }
 
-  // --------------------------------------------------------------------------
-  // LEADERBOARD HEADER — from Firebase
-  // --------------------------------------------------------------------------
-  Future<void> fetchLeaderboardHeader() async {
-    if (_isLoadingLeaderboard) return;
-
-    _isLoadingLeaderboard = true;
-    notifyListeners();
-
-    try {
-      _leaderboardData = await _repository.fetchLeaderboardHeader();
-
-      _todayRank = _leaderboardData?['todayRank'];
-      _allTimeRank = _leaderboardData?['allTimeRank'];
-
-      // Firebase bestScore overrides local best score if available
-      final fbBest = _leaderboardData?['bestScore'];
-      if (fbBest != null) {
-        _bestScore = fbBest;
-      }
-
-      _currentStreak = _leaderboardData?['currentStreak'] ?? 0;
-    } catch (e) {
-      debugPrint("⚠️ Leaderboard fetch error: $e");
-    }
-
-    _isLoadingLeaderboard = false;
-    notifyListeners();
-  }
-
-  // --------------------------------------------------------------------------
-  // ONLINE RANKED ATTEMPT HISTORY
-  // --------------------------------------------------------------------------
-  Future<List<Map<String, dynamic>>> fetchOnlineAttempts({
-    int limit = 200,
-  }) async {
-    try {
-      return await _repository.fetchOnlineAttempts(limit: limit);
-    } catch (_) {
-      return [];
-    }
-  }
-
+ 
   // --------------------------------------------------------------------------
   // RELOAD EVERYTHING
   // --------------------------------------------------------------------------
-  Future<void> reloadAll() async {
-    try {
-      await loadFromLocal();
-      await fetchLeaderboardHeader();
-      notifyListeners();
-    } catch (e) {
-      debugPrint("⚠️ reloadAll error: $e");
-    }
+Future<void> reloadAll() async {
+  try {
+    await loadFromLocal();
+    notifyListeners();
+  } catch (e) {
+    debugPrint("⚠️ reloadAll error: $e");
   }
+}
 
   // --------------------------------------------------------------------------
   // RESET
   // --------------------------------------------------------------------------
-  Future<void> resetAll() async {
-    _dailyScores.clear();
-    _leaderboardData = null;
+ Future<void> resetAll() async {
+  _dailyScores.clear();
+  _bestScore = null;
 
-    _currentStreak = 0;
-    _todayRank = null;
-    _allTimeRank = null;
-    _bestScore = null;
 
-    try {
-      await HiveService.clearDailyScores();
-    } catch (e) {
-      debugPrint("⚠️ resetAll error: $e");
-    }
-
-    notifyListeners();
+  try {
+    // Clear LOCAL ranked scores only
+    await HiveService.clearRankedScores();
+  } catch (e) {
+    debugPrint("⚠️ resetAll error: $e");
   }
+
+  notifyListeners();
+}
 
   // --------------------------------------------------------------------------
   // TEST SUPPORT

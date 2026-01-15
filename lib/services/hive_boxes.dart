@@ -2,19 +2,20 @@
 
 import 'package:hive_flutter/hive_flutter.dart';
 
-// 🧩 Core Models
-import '../models/user_profile.dart';
+// 🧩 Local user (offline identity)
+import '../providers/local_user_provider.dart';
+
+// 🧩 Core models
 import '../models/user_settings.dart';
 
-// 🧩 Feature Models
+// 🧩 Feature models
 import '../models/practice_log.dart';
 import '../models/question_history.dart';
 import '../models/daily_score.dart';
-import '../models/daily_quiz_meta.dart';
 import '../models/streak_data.dart';
 
-/// 🚀 Centralized Hive initialization system.
-/// Loads all adapters + required boxes for your entire app.
+/// 🚀 Centralized Hive initialization
+/// Offline-first, no-auth architecture
 class HiveBoxes {
   // ===========================================================================
   // INIT
@@ -23,82 +24,67 @@ class HiveBoxes {
     await Hive.initFlutter();
     registerAdapters();
     await openEssentialBoxes();
-    openBackgroundBoxes();
   }
 
   // ===========================================================================
   // ADAPTER REGISTRATION
   // ===========================================================================
   static void registerAdapters() {
-    // Core models
-    Hive.registerAdapter(UserProfileAdapter());
+    // Settings
     Hive.registerAdapter(UserSettingsAdapter());
 
-    // Practice data
+    // Practice & history
     Hive.registerAdapter(PracticeLogAdapter());
     Hive.registerAdapter(QuestionHistoryAdapter());
 
-    // Score models (old + new system)
+    // Scores
     Hive.registerAdapter(DailyScoreAdapter());
 
-    // Quiz metadata & streak tracking
-    Hive.registerAdapter(DailyQuizMetaAdapter());
+    // Streak
     Hive.registerAdapter(StreakDataAdapter());
   }
 
   // ===========================================================================
-  // ESSENTIAL BOXES (must load before running the app)
+  // ESSENTIAL BOXES
   // ===========================================================================
   static Future<void> openEssentialBoxes() async {
-    // Core user data
-    await Hive.openBox<UserProfile>('user_profile');
+    // 🧠 Local user identity
+    await Hive.openBox('local_user');
+
+    // ⚙️ App settings
     await Hive.openBox<UserSettings>('user_settings');
+
+    // 🔥 Streak tracking
     await Hive.openBox<StreakData>('streak_data');
 
-    // Activity map + logs
+    // 📊 Activity heatmap
     await Hive.openBox<Map>('activity_data');
+
+    // 🧾 Practice logs
     await Hive.openBox<PracticeLog>('practice_logs');
     await Hive.openBox<QuestionHistory>('question_history');
 
-    // 📌 OLD DailyScore box → used ONLY for:
-    // - Heatmap visualization
-    // - PerformanceScreen cumulative graphs
-    await Hive.openBox<DailyScore>('daily_scores');
-
-    // 📌 NEW separated score boxes → used for:
-    // - ResultScreen history filtering
-    // - New quiz system
+    // 📈 Scores
+    await Hive.openBox<DailyScore>('daily_scores'); // heatmap & graphs
     await Hive.openBox<DailyScore>('practice_scores');
     await Hive.openBox<DailyScore>('ranked_scores');
     await Hive.openBox<DailyScore>('mixed_scores');
 
-    // Quiz metadata (daily ranked)
-    await Hive.openBox<DailyQuizMeta>('daily_quiz_meta');
-
-    // Firebase leaderboard caching
+    // 🌍 Leaderboard cache (optional offline view)
     await Hive.openBox('leaderboard_cache');
 
-    // Offline sync
+    // 🔄 Sync queue (for failed leaderboard submits)
     await Hive.openBox<Map>('sync_queue');
   }
 
   // ===========================================================================
-  // BACKGROUND BOXES (future / optional)
-  // ===========================================================================
-  static Future<void> openBackgroundBoxes() async {
-    Future.microtask(() async {
-      // Currently empty — all essential boxes already loaded.
-    });
-  }
-
-  // ===========================================================================
-  // ACCESSORS (clean + grouped)
+  // ACCESSORS
   // ===========================================================================
 
-  // Core
-  static Box<UserProfile> get userProfileBox =>
-      Hive.box<UserProfile>('user_profile');
+  // Local user
+  static Box get localUserBox => Hive.box('local_user');
 
+  // Settings
   static Box<UserSettings> get userSettingsBox =>
       Hive.box<UserSettings>('user_settings');
 
@@ -109,11 +95,10 @@ class HiveBoxes {
   static Box<QuestionHistory> get questionHistoryBox =>
       Hive.box<QuestionHistory>('question_history');
 
-  // Old score box
+  // Scores
   static Box<DailyScore> get dailyScoreBox =>
       Hive.box<DailyScore>('daily_scores');
 
-  // New score boxes
   static Box<DailyScore> get practiceScoreBox =>
       Hive.box<DailyScore>('practice_scores');
 
@@ -123,11 +108,9 @@ class HiveBoxes {
   static Box<DailyScore> get mixedScoreBox =>
       Hive.box<DailyScore>('mixed_scores');
 
-  // Quiz state
-  static Box<StreakData> get streakData => Hive.box<StreakData>('streak_data');
-
-  static Box<DailyQuizMeta> get dailyQuizMeta =>
-      Hive.box<DailyQuizMeta>('daily_quiz_meta');
+  // Streak
+  static Box<StreakData> get streakDataBox =>
+      Hive.box<StreakData>('streak_data');
 
   // Misc
   static Box get leaderboardCacheBox => Hive.box('leaderboard_cache');

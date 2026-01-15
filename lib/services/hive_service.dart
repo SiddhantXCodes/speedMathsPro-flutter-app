@@ -7,26 +7,31 @@ import 'hive_boxes.dart';
 import '../models/practice_log.dart';
 import '../models/question_history.dart';
 import '../models/streak_data.dart';
-import '../models/daily_quiz_meta.dart';
+
 import '../models/daily_score.dart';
-import '../models/user_profile.dart';
+
 import '../models/user_settings.dart';
 import '../models/practice_mode.dart';
 
 class HiveService {
+  // ---------------------------------------------------------------------------
+  // Utils
+  // ---------------------------------------------------------------------------
   static String _dateKey(DateTime d) =>
       "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   static Future<Box<T>> _safeBox<T>(String name) async {
-    if (!Hive.isBoxOpen(name)) await Hive.openBox<T>(name);
+    if (!Hive.isBoxOpen(name)) {
+      await Hive.openBox<T>(name);
+    }
     return Hive.box<T>(name);
   }
 
   // ===========================================================================
-  // ⭐⭐ NEW QUIZ SYSTEM — STRICTLY SEPARATED SCORE BOXES
+  // ⭐ NEW QUIZ SYSTEM — STRICTLY SEPARATED SCORE BOXES
   // ===========================================================================
 
-  /// 🟦 Practice (practice_scores)
+  // ---------------- PRACTICE ----------------
   static Future<void> savePracticeScore(DailyScore score) async {
     final box = await _safeBox<DailyScore>('practice_scores');
     await box.add(score);
@@ -34,22 +39,42 @@ class HiveService {
 
   static List<DailyScore> getPracticeScores() {
     if (!Hive.isBoxOpen('practice_scores')) return [];
-    return Hive.box<DailyScore>(
-      'practice_scores',
-    ).values.toList().reversed.toList();
+    return Hive.box<DailyScore>('practice_scores')
+        .values
+        .toList()
+        .reversed
+        .toList();
   }
 
-  /// 🟥 Ranked — Firebase ONLY (do not store in Hive)
+  // ---------------- RANKED (ONE PER DAY) ----------------
   static Future<void> saveRankedScore(DailyScore score) async {
-    // Deprecated — ranked is Firebase only
+    final box = await _safeBox<DailyScore>('ranked_scores');
+    final key = _dateKey(score.date);
+
+    // overwrite → ensures ONE attempt per day
+    await box.put(key, score);
+
+    // ranked contributes to heatmap
+    await _incrementActivityForDate(score.date, 1);
   }
 
   static List<DailyScore> getRankedScores() {
-    // Always empty — ranked stored ONLY in Firebase now
-    return [];
+    if (!Hive.isBoxOpen('ranked_scores')) return [];
+    return Hive.box<DailyScore>('ranked_scores')
+        .values
+        .toList()
+        .reversed
+        .toList();
   }
 
-  /// 🟨 Mixed / Challenge (mixed_scores)
+  /// 🧠 Has user already played ranked today?
+  static Future<bool> hasRankedAttemptToday() async {
+    final box = await _safeBox<DailyScore>('ranked_scores');
+    final todayKey = _dateKey(DateTime.now());
+    return box.containsKey(todayKey);
+  }
+
+  // ---------------- MIXED ----------------
   static Future<void> saveMixedScore(DailyScore score) async {
     final box = await _safeBox<DailyScore>('mixed_scores');
     await box.add(score);
@@ -57,12 +82,14 @@ class HiveService {
 
   static List<DailyScore> getMixedScores() {
     if (!Hive.isBoxOpen('mixed_scores')) return [];
-    return Hive.box<DailyScore>(
-      'mixed_scores',
-    ).values.toList().reversed.toList();
+    return Hive.box<DailyScore>('mixed_scores')
+        .values
+        .toList()
+        .reversed
+        .toList();
   }
 
-  /// ⭐ Topic-based scores (store maps to avoid adapters)
+  // ---------------- TOPIC-BASED ----------------
   static Future<void> saveTopicScore(
     PracticeMode mode,
     DailyScore score,
@@ -73,7 +100,7 @@ class HiveService {
     await box.put(id, {
       'id': id,
       'mode': mode.name,
-      'date': _dateKey(score.date), // FIXED → yyyy-MM-dd
+      'date': _dateKey(score.date),
       'score': score.score,
       'timeTakenSeconds': score.timeTakenSeconds,
     });
@@ -81,45 +108,38 @@ class HiveService {
 
   static List<DailyScore> getTopicScores(PracticeMode mode) {
     if (!Hive.isBoxOpen('topic_scores')) return [];
+
     final box = Hive.box<Map>('topic_scores');
-
-    final items = box.values
-        .map((v) => Map<String, dynamic>.from(v))
-        .where((m) => (m['mode'] ?? '') == mode.name)
-        .toList()
-        .reversed
-        .toList();
-
     final out = <DailyScore>[];
 
-    for (final m in items) {
+    for (final raw in box.values) {
       try {
-        // Parse yyyy-MM-dd
-        final parts = (m['date'] as String).split('-');
-        final date = DateTime(
-          int.parse(parts[0]),
-          int.parse(parts[1]),
-          int.parse(parts[2]),
-        );
+        final m = Map<String, dynamic>.from(raw);
+        if (m['mode'] != mode.name) continue;
 
-        final score = (m['score'] as num).toInt();
-        final timeTaken = (m['timeTakenSeconds'] as num).toInt();
+        final p = (m['date'] as String).split('-');
+        final date = DateTime(
+          int.parse(p[0]),
+          int.parse(p[1]),
+          int.parse(p[2]),
+        );
 
         out.add(
-          DailyScore(date: date, score: score, timeTakenSeconds: timeTaken),
+          DailyScore(
+            date: date,
+            score: (m['score'] as num).toInt(),
+            timeTakenSeconds: (m['timeTakenSeconds'] as num).toInt(),
+          ),
         );
-      } catch (_) {
-        // Ignore corrupted entries
-      }
+      } catch (_) {}
     }
 
-    return out;
+    return out.reversed.toList();
   }
 
   // ===========================================================================
-  // OLD SYSTEM — still needed for heatmap + performance
+  // OLD DAILY SCORE SYSTEM (for heatmap + performance)
   // ===========================================================================
-
   static Future<void> addDailyScore(DailyScore score) async {
     final box = await _safeBox<DailyScore>('daily_scores');
     await box.put(_dateKey(score.date), score);
@@ -130,13 +150,8 @@ class HiveService {
     return Hive.box<DailyScore>('daily_scores').values.toList();
   }
 
-  static Future<void> clearDailyScores() async {
-    final box = await _safeBox<DailyScore>('daily_scores');
-    await box.clear();
-  }
-
   // ===========================================================================
-  // PRACTICE LOGS (OLD FEATURE)
+  // PRACTICE LOGS
   // ===========================================================================
   static Future<void> addPracticeLog(PracticeLog log) async {
     final box = HiveBoxes.practiceLogBox;
@@ -147,13 +162,6 @@ class HiveService {
   static List<PracticeLog> getPracticeLogs() {
     if (!Hive.isBoxOpen('practice_logs')) return [];
     return HiveBoxes.practiceLogBox.values.toList();
-  }
-
-  static Future<void> clearPracticeLogs() async {
-    await HiveBoxes.practiceLogBox.clear();
-    if (Hive.isBoxOpen('activity_data')) {
-      await Hive.box<Map>('activity_data').delete('activity');
-    }
   }
 
   // ===========================================================================
@@ -191,31 +199,32 @@ class HiveService {
     return Hive.box<UserSettings>('user_settings').get('settings');
   }
 
-  static Future<void> saveUser(UserProfile user) async {
-    final box = await _safeBox<UserProfile>('user_profile');
-    await box.put(user.uid, user);
+
+  // ✅ ADD THIS METHOD (FIXES YOUR ERROR)
+  static Future<void> clearRankedScores() async {
+    final box = await _safeBox<DailyScore>('ranked_scores');
+    await box.clear();
+  }
+// ===========================================================================
+// PRACTICE LOGS — CLEAR
+// ===========================================================================
+static Future<void> clearPracticeLogs() async {
+  if (!Hive.isBoxOpen('practice_logs')) {
+    await Hive.openBox<PracticeLog>('practice_logs');
   }
 
-  static UserProfile? getUser(String uid) {
-    if (!Hive.isBoxOpen('user_profile')) return null;
-    return Hive.box<UserProfile>('user_profile').get(uid);
+  final box = Hive.box<PracticeLog>('practice_logs');
+  await box.clear();
+
+  // Also clear activity map (heatmap reset for practice)
+  if (Hive.isBoxOpen('activity_data')) {
+    await Hive.box<Map>('activity_data').delete('activity');
   }
+}
+
 
   // ===========================================================================
-  // DAILY QUIZ META
-  // ===========================================================================
-  static Future<void> saveDailyQuizMeta(DailyQuizMeta meta) async {
-    final box = await _safeBox<DailyQuizMeta>('daily_quiz_meta');
-    await box.put(meta.date, meta);
-  }
-
-  static DailyQuizMeta? getDailyQuizMeta(String dateKey) {
-    if (!Hive.isBoxOpen('daily_quiz_meta')) return null;
-    return Hive.box<DailyQuizMeta>('daily_quiz_meta').get(dateKey);
-  }
-
-  // ===========================================================================
-  // ACTIVITY MAP — for heatmap
+  // ACTIVITY MAP (HEATMAP)
   // ===========================================================================
   static Future<void> _incrementActivityForDate(DateTime d, int by) async {
     final box = await _safeBox<Map>('activity_data');
@@ -234,42 +243,17 @@ class HiveService {
     if (raw == null) return {};
 
     final output = <DateTime, int>{};
-
     Map<String, dynamic>.from(raw).forEach((k, v) {
       try {
         final p = k.split('-');
-        output[DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]))] =
-            (v as num).toInt();
+        output[DateTime(
+          int.parse(p[0]),
+          int.parse(p[1]),
+          int.parse(p[2]),
+        )] = (v as num).toInt();
       } catch (_) {}
     });
-
     return output;
-  }
-
-  // ===========================================================================
-  // STATS
-  // ===========================================================================
-  static Map<String, dynamic> getStats() {
-    if (!Hive.isBoxOpen('practice_logs')) return {};
-
-    final logs = HiveBoxes.practiceLogBox.values.toList();
-    if (logs.isEmpty) return {};
-
-    int correct = 0, wrong = 0;
-    double avg = 0;
-
-    for (final l in logs) {
-      correct += l.correct;
-      wrong += l.incorrect;
-      avg += l.avgTime;
-    }
-
-    return {
-      'sessions': logs.length,
-      'totalCorrect': correct,
-      'totalIncorrect': wrong,
-      'avgTime': logs.isEmpty ? 0 : avg / logs.length,
-    };
   }
 
   // ===========================================================================
@@ -284,44 +268,19 @@ class HiveService {
     await box.put(id, {'id': id, 'type': type, 'data': data});
   }
 
-  static List<Map<String, dynamic>> getPendingSyncs() {
-    if (!Hive.isBoxOpen('sync_queue')) return [];
-    return Hive.box<Map>(
-      'sync_queue',
-    ).values.map((e) => Map<String, dynamic>.from(e)).toList();
-  }
-
-  static Future<void> clearPendingSyncsOfType(String type) async {
-    final box = await _safeBox<Map>('sync_queue');
-    final toDelete = box.keys.where((k) {
-      final item = box.get(k);
-      return item != null && item['type'] == type;
-    }).toList();
-
-    for (final k in toDelete) {
-      await box.delete(k);
-    }
-  }
-
-  static Future<void> clearSynced(String id) async {
-    final box = await _safeBox<Map>('sync_queue');
-    await box.delete(id);
-  }
-
   // ===========================================================================
-  // CLEAR EVERYTHING (for logout)
+  // CLEAR ALL (LOGOUT / RESET)
   // ===========================================================================
   static Future<void> clearAllOfflineData() async {
     await HiveBoxes.practiceLogBox.clear();
     await HiveBoxes.questionHistoryBox.clear();
     await HiveBoxes.dailyScoreBox.clear();
 
-    await (await _safeBox<DailyQuizMeta>('daily_quiz_meta')).clear();
     await (await _safeBox<Map>('activity_data')).clear();
     await (await _safeBox<Map>('sync_queue')).clear();
 
     await (await _safeBox<DailyScore>('practice_scores')).clear();
     await (await _safeBox<DailyScore>('mixed_scores')).clear();
-    // ranked_scores removed (not used anymore)
+    await (await _safeBox<DailyScore>('ranked_scores')).clear();
   }
 }

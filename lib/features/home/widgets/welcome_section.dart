@@ -1,7 +1,8 @@
 // lib/features/home/widgets/welcome_section.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../features/auth/auth_provider.dart';
+import '../../../providers/local_user_provider.dart';
 
 class WelcomeSection extends StatelessWidget {
   const WelcomeSection({super.key});
@@ -9,39 +10,40 @@ class WelcomeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final auth = Provider.of<AuthProvider>(context, listen: true);
+    final localUser = context.watch<LocalUserProvider>();
 
-    // 🔹 Extract first name safely
-    String firstName = "there";
-    if (auth.user != null && auth.user!.displayName != null) {
-      final name = auth.user!.displayName!.trim();
-      if (name.isNotEmpty) {
-        firstName = name.split(" ").first;
-      }
-    }
+    final name = localUser.username;
+    final firstName =
+        (name != null && name.trim().isNotEmpty) ? name.split(' ').first : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Hi $firstName 👋",
+          firstName != null ? "Hi $firstName 👋" : "Hi there 👋",
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
+
         const SizedBox(height: 4),
+
         Text(
           "Ready to sharpen your math reflexes today?",
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.hintColor,
+          ),
         ),
+
         const SizedBox(height: 12),
 
         ElevatedButton.icon(
           onPressed: () {
-            // TODO: Check if user has completed daily ranked quiz
+            // You already handle this logic in PracticeBarSection
+            // So this button can simply scroll or navigate
           },
           icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text("Continue Daily Ranked Quiz"),
+          label: const Text("Start Daily Ranked Quiz"),
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,
             shape: RoundedRectangleBorder(

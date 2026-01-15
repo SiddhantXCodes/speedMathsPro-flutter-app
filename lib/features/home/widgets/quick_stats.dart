@@ -1,22 +1,12 @@
 // lib/features/home/widgets/quick_stats.dart
 
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../theme/app_theme.dart';
-import '../../auth/screens/login_screen.dart';
-import '../../quiz/screens/daily_ranked_quiz_entry.dart';
-import '../../quiz/screens/leaderboard_screen.dart';
-import '../../performance/screens/performance_screen.dart';
 import '../../../services/hive_service.dart';
 import '../../../providers/performance_provider.dart';
-import '../../quiz/widgets/quiz_entry_popup.dart';
-import '../../auth/auth_provider.dart' as myauth;
-import '../../quiz/screens/result_screen.dart';
-import '../../../models/practice_mode.dart'; // ensure QuizMode is imported
+import '../../performance/screens/performance_screen.dart';
 
 class QuickStatsSection extends StatefulWidget {
   final bool isDarkMode;
@@ -26,112 +16,40 @@ class QuickStatsSection extends StatefulWidget {
   State<QuickStatsSection> createState() => _QuickStatsSectionState();
 }
 
-class _QuickStatsSectionState extends State<QuickStatsSection>
-    with WidgetsBindingObserver {
-  // ---------------- NOTIFIERS ----------------
-  final ValueNotifier<int> offlineSessions = ValueNotifier<int>(0);
-  final ValueNotifier<int> bestOfflineScore = ValueNotifier<int>(0);
-  final ValueNotifier<int> weeklyAverage = ValueNotifier<int>(0);
-
-  final ValueNotifier<int?> todayScore = ValueNotifier<int?>(null);
-  final ValueNotifier<int?> todayRank = ValueNotifier<int?>(null);
-  final ValueNotifier<int?> weeklyRank = ValueNotifier<int?>(null);
-  final ValueNotifier<bool> attemptedToday = ValueNotifier<bool>(false);
-
-  // ---------------- REALTIME SUBS ----------------
-  StreamSubscription? _todayEntrySub;
-  StreamSubscription? _todayLeaderboardSub;
-  StreamSubscription? _weeklySub;
-
-  bool _isFetching = false;
-  DateTime _lastFetch = DateTime.fromMillisecondsSinceEpoch(0);
-
-  bool _shouldFetch() =>
-      DateTime.now().difference(_lastFetch).inMilliseconds > 300;
+class _QuickStatsSectionState extends State<QuickStatsSection> {
+  int sessions = 0;
+  int bestScore = 0;
+  int weeklyAvg = 0;
+  bool attemptedToday = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
 
+    _loadStats();
+
+    // 🔁 Auto-refresh when performance updates (after quiz)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        context.read<myauth.AuthProvider>().addListener(_onExtChange);
-      } catch (_) {}
-      try {
-        context.read<PerformanceProvider>().addListener(_onExtChange);
-      } catch (_) {}
-      _init();
+      context.read<PerformanceProvider>().addListener(_loadStats);
     });
-  }
-
-  Future<void> _init() async {
-    await _fetchStats();
-    _setupRealtimeListeners();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-
-    try {
-      context.read<myauth.AuthProvider>().removeListener(_onExtChange);
-    } catch (_) {}
-    try {
-      context.read<PerformanceProvider>().removeListener(_onExtChange);
-    } catch (_) {}
-
-    _cancelSubs();
-
-    offlineSessions.dispose();
-    bestOfflineScore.dispose();
-    weeklyAverage.dispose();
-    todayScore.dispose();
-    todayRank.dispose();
-    weeklyRank.dispose();
-    attemptedToday.dispose();
-
+    context.read<PerformanceProvider>().removeListener(_loadStats);
     super.dispose();
   }
 
-  void _onExtChange() {
-    if (_shouldFetch()) {
-      _fetchStats();
-      _setupRealtimeListeners();
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _shouldFetch()) {
-      Future.delayed(const Duration(milliseconds: 150), _fetchStats);
-    }
-  }
-
-  // ----------------------------------------------------------------------
-  // ------------------------- Fetch Everything ---------------------------
-  // ----------------------------------------------------------------------
-  Future<void> _fetchStats() async {
-    if (!mounted || _isFetching) return;
-
-    _isFetching = true;
-    _lastFetch = DateTime.now();
-
-    try {
-      _fetchOfflineStats();
-      await _fetchTodayAndWeeklyStats();
-    } catch (_) {}
-
-    _isFetching = false;
-  }
-
-  void _fetchOfflineStats() {
+  // --------------------------------------------------------------------------
+  // LOAD STATS (OFFLINE ONLY)
+  // --------------------------------------------------------------------------
+  Future<void> _loadStats() async {
     final all = [
       ...HiveService.getPracticeScores(),
       ...HiveService.getMixedScores(),
     ];
 
-    offlineSessions.value = all.length;
+    sessions = all.length;
 
     int best = 0;
     int sum = 0;
@@ -148,201 +66,20 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
       }
     }
 
-    bestOfflineScore.value = best;
-    weeklyAverage.value = count > 0 ? (sum ~/ count) : 0;
+    bestScore = best;
+    weeklyAvg = count > 0 ? (sum ~/ count) : 0;
+
+    // 🔒 Offline ranked check
+    attemptedToday = await HiveService.hasRankedAttemptToday();
+
+    if (mounted) setState(() {});
   }
 
-  // ----------------------------------------------------------------------
-  // ------------------- ONE-SHOT TODAY + WEEKLY FETCH -------------------
-  // ----------------------------------------------------------------------
-  Future<void> _fetchTodayAndWeeklyStats() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      attemptedToday.value = false;
-      todayScore.value = null;
-      todayRank.value = null;
-      weeklyRank.value = null;
-      return;
-    }
-
-    final uid = user.uid;
-    final now = DateTime.now();
-    final todayKey =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-    try {
-      // TODAY SCORE
-      final todayDoc = await FirebaseFirestore.instance
-          .collection("daily_leaderboard")
-          .doc(todayKey)
-          .collection("entries")
-          .doc(uid)
-          .get();
-
-      if (todayDoc.exists) {
-        attemptedToday.value = true;
-        final raw = todayDoc.data()?["score"];
-        todayScore.value = raw is int ? raw : (raw is num ? raw.toInt() : null);
-      } else {
-        attemptedToday.value = false;
-        todayScore.value = null;
-      }
-
-      // TODAY RANK
-      final todaySnap = await FirebaseFirestore.instance
-          .collection("daily_leaderboard")
-          .doc(todayKey)
-          .collection("entries")
-          .orderBy("score", descending: true)
-          .orderBy("timeTaken")
-          .get();
-
-      int r = 1;
-      int? result;
-      for (final d in todaySnap.docs) {
-        if (d.id == uid) {
-          result = r;
-          break;
-        }
-        r++;
-      }
-      todayRank.value = result;
-
-      // WEEKLY RANK
-      weeklyRank.value = await _computeWeeklyRank(uid);
-    } catch (e) {
-      print("Error fetching ranked: $e");
-    }
-  }
-
-  // ----------------------------------------------------------------------
-  // --------------------------- REALTIME LISTENERS -----------------------
-  // ----------------------------------------------------------------------
-  void _setupRealtimeListeners() {
-    _cancelSubs();
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final uid = user.uid;
-
-    final now = DateTime.now();
-    final todayKey =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-    // DAILY ENTRY LISTENER
-    _todayEntrySub = FirebaseFirestore.instance
-        .collection("daily_leaderboard")
-        .doc(todayKey)
-        .collection("entries")
-        .doc(uid)
-        .snapshots()
-        .listen((doc) async {
-          if (!mounted) return;
-
-          if (doc.exists) {
-            attemptedToday.value = true;
-            final raw = doc.data()?["score"];
-            todayScore.value = raw is int
-                ? raw
-                : (raw is num ? raw.toInt() : null);
-          } else {
-            attemptedToday.value = false;
-            todayScore.value = null;
-          }
-
-          weeklyRank.value = await _computeWeeklyRank(uid);
-        });
-
-    // TODAY RANK LISTENER
-    _todayLeaderboardSub = FirebaseFirestore.instance
-        .collection("daily_leaderboard")
-        .doc(todayKey)
-        .collection("entries")
-        .orderBy("score", descending: true)
-        .orderBy("timeTaken")
-        .snapshots()
-        .listen((snap) {
-          if (!mounted) return;
-
-          final idx = snap.docs.indexWhere((d) => d.id == uid);
-          todayRank.value = idx >= 0 ? idx + 1 : null;
-        });
-
-    // WEEKLY UPDATES LISTENER
-    _weeklySub = FirebaseFirestore.instance
-        .collection("daily_leaderboard")
-        .snapshots()
-        .listen((_) async {
-          if (!mounted) return;
-          weeklyRank.value = await _computeWeeklyRank(uid);
-        });
-  }
-
-  void _cancelSubs() {
-    _todayEntrySub?.cancel();
-    _todayEntrySub = null;
-
-    _todayLeaderboardSub?.cancel();
-    _todayLeaderboardSub = null;
-
-    _weeklySub?.cancel();
-    _weeklySub = null;
-  }
-
-  // ----------------------------------------------------------------------
-  // -------------------------- WEEKLY RANK LOGIC -------------------------
-  // ----------------------------------------------------------------------
-  Future<int?> _computeWeeklyRank(String uid) async {
-    try {
-      final now = DateTime.now();
-      final last7 = List.generate(7, (i) => now.subtract(Duration(days: i)));
-
-      Map<String, int> bestByUser = {};
-
-      for (final d in last7) {
-        final key =
-            "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-
-        final snap = await FirebaseFirestore.instance
-            .collection("daily_leaderboard")
-            .doc(key)
-            .collection("entries")
-            .get();
-
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          final suid = data["uid"];
-          final score = data["score"] ?? 0;
-
-          if (!bestByUser.containsKey(suid) || score > bestByUser[suid]!) {
-            bestByUser[suid] = score;
-          }
-        }
-      }
-
-      if (!bestByUser.containsKey(uid)) return null;
-
-      final sorted = bestByUser.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      int rank = 1;
-      for (final e in sorted) {
-        if (e.key == uid) return rank;
-        rank++;
-      }
-      return null;
-    } catch (e) {
-      print("Weekly rank error: $e");
-      return null;
-    }
-  }
-
-  // ----------------------------------------------------------------------
-  // ------------------------------ UI ------------------------------------
-  // ----------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // UI
+  // --------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
     final accent = AppTheme.adaptiveAccent(context);
     final cardColor = AppTheme.adaptiveCard(context);
     final textColor = AppTheme.adaptiveText(context);
@@ -386,7 +123,7 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
                 icon: Icon(Icons.insights, color: accent),
                 label: Text(
                   "Performance",
-                  style: TextStyle(color: accent, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: accent),
                 ),
               ),
             ],
@@ -394,186 +131,32 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
 
           const SizedBox(height: 14),
 
-          // Offline stats
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _valueBox(offlineSessions, Icons.school, "Sessions", accent),
-              _valueBox(bestOfflineScore, Icons.stars, "Best", accent),
-              _valueBox(weeklyAverage, Icons.show_chart, "Weekly Avg", accent),
+              _valueBox(Icons.school, "Sessions", sessions, accent),
+              _valueBox(Icons.stars, "Best", bestScore, accent),
+              _valueBox(Icons.show_chart, "Weekly Avg", weeklyAvg, accent),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Ranked section
-          user != null ? _rankedSection(accent, textColor) : _guestCTA(accent),
-        ],
-      ),
-    );
-  }
-
-  // ----------------------------------------------------------------------
-  // --------------------------- RANKED SECTION ---------------------------
-  // ----------------------------------------------------------------------
-  Widget _rankedSection(Color accent, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        children: [
-          ValueListenableBuilder<bool>(
-            valueListenable: attemptedToday,
-            builder: (_, played, __) => Text(
-              played
-                  ? "🎯 You've completed today's ranked quiz!"
-                  : "⚡ Take today's Ranked Quiz and climb the leaderboard!",
+          // Ranked status (offline)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              attemptedToday
+                  ? "🎯 You’ve completed today’s Ranked Quiz"
+                  : "⚡ Today’s Ranked Quiz is available",
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: 13.5,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _valueBox(
-                todayRank,
-                Icons.emoji_events,
-                "Today Rank",
-                accent,
-                prefix: "#",
-              ),
-              _valueBox(todayScore, Icons.bolt, "Today Score", accent),
-              _valueBox(
-                weeklyRank,
-                Icons.trending_up,
-                "Weekly Rank",
-                accent,
-                prefix: "#",
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
-          // MAIN BUTTON
-          ValueListenableBuilder<bool>(
-            valueListenable: attemptedToday,
-            builder: (_, played, __) {
-              return SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    if (played) {
-                      // ⭐ USER HAS ATTEMPTED → SHOW RANKED RESULT SCREEN
-
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) return;
-
-                      final uid = user.uid;
-                      final now = DateTime.now();
-
-                      final todayKey =
-                          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-                      final doc = await FirebaseFirestore.instance
-                          .collection("daily_leaderboard")
-                          .doc(todayKey)
-                          .collection("entries")
-                          .doc(uid)
-                          .get();
-
-                      final score = todayScore.value ?? 0;
-                      final timeTaken = (doc.data()?["timeTaken"] ?? 0).toInt();
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ResultScreen(
-                            score: score,
-                            timeTakenSeconds: timeTaken,
-                          ),
-                        ),
-                      );
-                    } else {
-                      // ⭐ START QUIZ NOW
-                      showQuizEntryPopup(
-                        context: context,
-                        title: "Daily Ranked Quiz",
-                        infoLines: const [
-                          "150 seconds timer",
-                          "Score = total correct answers",
-                          "1 attempt per day",
-                        ],
-                        onStart: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const DailyRankedQuizEntry(),
-                            ),
-                          ).then((_) async => await _fetchStats());
-                        },
-                      );
-                    }
-                  },
-                  icon: Icon(
-                    played ? Icons.assessment_rounded : Icons.flash_on_rounded,
-                    size: 22,
-                  ),
-                  label: Text(
-                    played ? "View Ranked Result" : "Take Today's Ranked Quiz",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 2,
-                  ),
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(height: 12),
-
-          // ALWAYS SHOW LEADERBOARD BUTTON
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-                );
-              },
-              icon: const Icon(Icons.emoji_events_rounded, size: 22),
-              label: const Text(
-                "View Leaderboard",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accent.withOpacity(0.85),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 2,
+                fontSize: 13,
               ),
             ),
           ),
@@ -582,76 +165,35 @@ class _QuickStatsSectionState extends State<QuickStatsSection>
     );
   }
 
-  // ----------------------------------------------------------------------
-  // ------------------------------ OTHER UI ------------------------------
-  // ----------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // VALUE BOX
+  // --------------------------------------------------------------------------
   Widget _valueBox(
-    ValueNotifier notifier,
     IconData icon,
     String title,
-    Color accent, {
-    String prefix = "",
-  }) {
-    return ValueListenableBuilder(
-      valueListenable: notifier,
-      builder: (_, val, __) {
-        final display = val == null
-            ? "—"
-            : (prefix.isEmpty ? "$val" : "$prefix$val");
-
-        return Column(
-          children: [
-            Icon(icon, color: accent, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              display,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: accent,
-                fontSize: 15,
-              ),
-            ),
-            Text(
-              title,
-              style: TextStyle(fontSize: 12, color: accent.withOpacity(0.7)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _guestCTA(Color accent) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        children: [
-          const Text(
-            "🔥 Take the Daily Ranked Quiz to get your global ranking!",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+    int value,
+    Color accent,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, color: accent, size: 22),
+        const SizedBox(height: 4),
+        Text(
+          "$value",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: accent,
+            fontSize: 15,
           ),
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            },
-            icon: const Icon(Icons.login_rounded),
-            label: const Text("Login to Compete"),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: accent,
-              side: BorderSide(color: accent),
-            ),
+        ),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            color: accent.withOpacity(0.7),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

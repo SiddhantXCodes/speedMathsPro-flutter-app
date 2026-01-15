@@ -12,11 +12,9 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase
+  # Firebase (leaderboard only)
   firebase_core: ^4.2.1
   cloud_firestore: ^6.1.0
-  firebase_auth: ^6.1.2
-  google_sign_in: ^6.2.1
 
   # State management
   provider: ^6.1.0
@@ -39,30 +37,29 @@ dependencies:
   flutter_svg: ^2.0.9
   animations: ^2.0.0
   share_plus: ^10.0.2
-  connectivity_plus: ^5.0.2
-  mockito: ^5.4.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  # Lints
+
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.13.1
+
   # Code generation
   build_runner: ^2.4.13
   hive_generator: ^2.0.1
-  # 🚀 Integration testing
+
+  # Integration testing
   integration_test:
     sdk: flutter
 
-  
+  # mockito: ^5.4.4   # ← enable only if writing mocks
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/elf_icon.png
-    - assets/images/google_logo.png
     - assets/images/speedmathspro-logo.png
 
 flutter_icons:

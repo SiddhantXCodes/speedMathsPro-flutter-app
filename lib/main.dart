@@ -1,6 +1,4 @@
 // lib/main.dart
-// Providers are created + initialized BEFORE HomeScreen builds
-// Ensures heatmap, stats, streak all load instantly
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -13,9 +11,9 @@ import 'app.dart';
 
 // Providers
 import 'providers/theme_provider.dart';
-import 'features/auth/auth_provider.dart';
 import 'providers/practice_log_provider.dart';
 import 'providers/performance_provider.dart';
+import 'providers/local_user_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,15 +29,12 @@ class BootApp extends StatefulWidget {
 
 class _BootAppState extends State<BootApp> {
   bool _isReady = false;
-
-  // Message not shown on UI anymore, but kept for debug/log safety
   String _message = "Initializing…";
 
-  // Provider instances created only ONCE
   late final ThemeProvider _themeProvider;
-  late final AuthProvider _authProvider;
   late final PracticeLogProvider _practiceProvider;
   late final PerformanceProvider _performanceProvider;
+  late final LocalUserProvider _localUserProvider;
 
   @override
   void initState() {
@@ -47,37 +42,31 @@ class _BootAppState extends State<BootApp> {
     _initialize();
   }
 
-  /// ---------------------------------------------------------
-  /// 🚀 FULL APP INITIALIZATION PIPELINE
-  /// ---------------------------------------------------------
   Future<void> _initialize() async {
     try {
-      // Firebase + Hive + services
       await AppInitializer.ensureInitialized((status) {
-        if (mounted) _message = status; // internal log only
+        if (mounted) _message = status;
       });
 
-      // Create providers
       _themeProvider = ThemeProvider();
-      _authProvider = AuthProvider();
       _practiceProvider = PracticeLogProvider();
       _performanceProvider = PerformanceProvider();
+      _localUserProvider = LocalUserProvider();
 
-      // Wait for async provider init
       int retries = 0;
       while ((!_practiceProvider.initialized ||
-              !_performanceProvider.initialized) &&
+              !_performanceProvider.initialized ||
+              !_localUserProvider.initialized) &&
           retries < 60) {
         await Future.delayed(const Duration(milliseconds: 100));
         retries++;
       }
 
-      // Sync offline → online
       await SyncManager().syncPendingSessions();
 
       if (mounted) setState(() => _isReady = true);
     } catch (e) {
-      if (mounted) _message = "❌ Initialization failed: $e";
+      if (mounted) _message = "❌ Initialization failed";
     }
   }
 
@@ -89,21 +78,19 @@ class _BootAppState extends State<BootApp> {
 
   @override
   Widget build(BuildContext context) {
-    // BootScreen wrapped in MaterialApp (required)
     if (!_isReady) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: BootScreen(message: _message), // message not used anymore
+        home: BootScreen(message: _message),
       );
     }
 
-    // Providers already initialized → instant UI
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _themeProvider),
-        ChangeNotifierProvider.value(value: _authProvider),
         ChangeNotifierProvider.value(value: _practiceProvider),
         ChangeNotifierProvider.value(value: _performanceProvider),
+        ChangeNotifierProvider.value(value: _localUserProvider),
       ],
       child: ScreenUtilInit(
         designSize: const Size(390, 844),

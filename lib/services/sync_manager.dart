@@ -1,163 +1,100 @@
-// lib/services/sync_manager.dart
-
-import 'dart:async';
 import 'dart:developer';
-
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:hive/hive.dart';
 
-// Repository imports
-import '../features/practice/practice_repository.dart';
-import '../features/performance/performance_repository.dart';
 import '../features/quiz/quiz_repository.dart';
 
-import 'hive_service.dart';
-
-/// 🌐 SyncManager — Central Hybrid Sync Layer
-/// Handles:
-/// • Sync queue (Hive) → Firebase
-/// • Practice logs sync
-/// • Performance sync (daily scores + streak)
-/// • Ranked quiz offline → online sync
-/// • Auto-sync on network reconnect
+/// 🎯 SyncManager (CLEAN & FINAL)
+///
+/// Responsibility:
+/// • Upload DAILY RANKED QUIZ entry
+/// • Retry pending daily leaderboard uploads
+/// • NO background sync
+/// • NO connectivity listener
 class SyncManager {
+  // ---------------------------------------------------------------------------
   // Singleton
+  // ---------------------------------------------------------------------------
   static final SyncManager _instance = SyncManager._internal();
   factory SyncManager() => _instance;
   SyncManager._internal();
 
-  // Dependencies
-  final PracticeRepository practiceRepo = PracticeRepository();
-  final PerformanceRepository perfRepo = PerformanceRepository();
-  final QuizRepository quizRepo = QuizRepository();
-
-  StreamSubscription<ConnectivityResult>? _connectionSub;
+  final QuizRepository _quizRepo = QuizRepository();
 
   bool _isSyncing = false;
-  DateTime _lastSync = DateTime.fromMillisecondsSinceEpoch(0);
 
   // ---------------------------------------------------------------------------
-  // 🚀 Start Sync Listener (AUTO SYNC)
+  // 🚀 Sync DAILY LEADERBOARD entries
   // ---------------------------------------------------------------------------
-  Future<void> start() async {
-    log("🔄 SyncManager starting...");
-
-    _connectionSub = Connectivity().onConnectivityChanged.listen((
-      result,
-    ) async {
-      if (result == ConnectivityResult.none) {
-        log("📴 Offline — sync paused.");
-        return;
-      }
-
-      // Debounce — avoid multiple triggers
-      final now = DateTime.now();
-      if (now.difference(_lastSync).inSeconds < 8) return;
-      _lastSync = now;
-
-      log("🌐 Online — triggering sync...");
-      await syncAll();
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // 🛑 Stop Sync Listener
-  // ---------------------------------------------------------------------------
-  void stop() {
-    _connectionSub?.cancel();
-    log("🛑 SyncManager stopped.");
-  }
-
-  // ---------------------------------------------------------------------------
-  // 🔁 Full Multi-Repo Sync
-  // ---------------------------------------------------------------------------
-  Future<void> syncAll() async {
+  Future<void> syncRankedAttempts() async {
     if (_isSyncing) {
-      log("⚙️ Sync already running — skipping duplicate.");
+      log("⚙️ Sync already running — skipped");
       return;
     }
 
     _isSyncing = true;
-    log("🚀 SyncManager: Sync starting...");
+    log("🚀 Syncing daily leaderboard entries...");
 
     try {
-      // 1️⃣ Sync queued offline items
-      await _syncQueuedOperations();
-
-      // 2️⃣ Sync practice logs to Firebase
-      await practiceRepo.syncData();
-
-      // 3️⃣ Sync performance (streak + daily scores)
-      await perfRepo.syncData();
-
-      log("✅ SyncManager: All sync operations completed.");
+      await _syncDailyLeaderboardQueue();
+      log("✅ Daily leaderboard sync complete");
     } catch (e, st) {
-      log("❌ SyncManager error: $e", stackTrace: st);
+      log("❌ Daily leaderboard sync failed: $e", stackTrace: st);
     } finally {
       _isSyncing = false;
     }
   }
 
   // ---------------------------------------------------------------------------
-  // 📦 Sync items from Hive Sync Queue
+  // 📦 Sync ONLY daily_leaderboard items from Hive queue
   // ---------------------------------------------------------------------------
-  Future<void> _syncQueuedOperations() async {
-    log("📦 Checking Hive sync queue...");
+  Future<void> _syncDailyLeaderboardQueue() async {
+    if (!Hive.isBoxOpen('sync_queue')) {
+      await Hive.openBox<Map>('sync_queue');
+    }
 
-    try {
-      if (!Hive.isBoxOpen('sync_queue')) {
-        try {
-          await Hive.openBox('sync_queue');
-        } catch (_) {
-          log("⚠️ Unable to open sync_queue");
-          return;
-        }
+    final Box<Map> box = Hive.box<Map>('sync_queue');
+
+    if (box.isEmpty) {
+      log("ℹ️ No pending daily leaderboard entries");
+      return;
+    }
+
+    final keys = box.keys.toList();
+
+    for (final key in keys) {
+      final raw = box.get(key);
+      if (raw == null) continue;
+
+      final item = Map<String, dynamic>.from(raw);
+      final type = item['type'];
+
+      // ✅ ONLY daily_leaderboard
+      if (type != 'daily_leaderboard') continue;
+
+      final data = Map<String, dynamic>.from(item['data']);
+
+      try {
+        log("📤 Uploading daily leaderboard entry...");
+        await _quizRepo.syncDailyLeaderboardEntry(data);
+
+        await box.delete(key);
+        log("🧹 Daily leaderboard entry synced & removed");
+      } catch (e, st) {
+        log("⚠️ Upload failed — will retry later", stackTrace: st);
       }
-
-      final box = Hive.box('sync_queue');
-      if (box.isEmpty) {
-        log("ℹ️ No queued items.");
-        return;
-      }
-
-      final keys = box.keys.toList();
-
-      for (final key in keys) {
-        final item = Map<String, dynamic>.from(box.get(key));
-        final type = item['type'];
-        final data = Map<String, dynamic>.from(item['data']);
-
-        try {
-          if (type == 'practice_logs') {
-            // Already handled via PracticeRepository
-            await practiceRepo.syncPendingSessions();
-          } else if (type == 'ranked_attempt') {
-            // ✔ Correct updated key from QuizRepository
-            log("📤 Syncing offline ranked attempt...");
-            await quizRepo.syncOfflineRankedFromQueue(data);
-          } else {
-            log("⚠️ Unknown sync type: $type");
-            continue;
-          }
-
-          // Remove once synced
-          await box.delete(key);
-          log("🧹 Synced and removed queue item: $type");
-        } catch (e, st) {
-          log("❌ Failed to sync item ($type): $e", stackTrace: st);
-          continue;
-        }
-      }
-    } catch (e, st) {
-      log("❌ Failed to sync queue: $e", stackTrace: st);
     }
   }
 
   // ---------------------------------------------------------------------------
-  // 🕓 Manual sync trigger (optional)
+  // 🕓 Manual trigger (called after quiz submit)
   // ---------------------------------------------------------------------------
   Future<void> syncPendingSessions() async {
-    log("🔁 Manual sync trigger...");
-    await syncAll();
+    await syncRankedAttempts();
   }
+
+  // ---------------------------------------------------------------------------
+  // 🛑 No-op (kept for backward compatibility)
+  // ---------------------------------------------------------------------------
+  void start() {}
+  void stop() {}
 }

@@ -1,22 +1,15 @@
 // lib/providers/app_provider.dart
 import 'package:flutter/material.dart';
-import '../services/sync_manager.dart';
 
 class AppProvider extends ChangeNotifier {
-  final SyncManager syncManager;
+  /// App-level flags (extend later if needed)
 
-  bool _isOnline = true;
-  bool get isOnline => _isOnline;
+  bool _initialized = false;
+  bool get initialized => _initialized;
 
-  AppProvider({required this.syncManager});
-
-  Future<void> syncAll() async {
-    await syncManager.syncAll();
-    notifyListeners();
-  }
-
-  void updateNetworkStatus(bool status) {
-    _isOnline = status;
+  void markInitialized() {
+    if (_initialized) return;
+    _initialized = true;
     notifyListeners();
   }
 }

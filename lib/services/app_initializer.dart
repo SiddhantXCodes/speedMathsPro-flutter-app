@@ -6,65 +6,32 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'firebase_options.dart';
 import 'hive_boxes.dart';
-import 'sync_manager.dart';
 
 class AppInitializer {
   static bool _initialized = false;
 
-  /// ---------------------------------------------------------------
-  /// 1️⃣ Called from main.dart — safe wrapper
-  /// ---------------------------------------------------------------
   static Future<void> ensureInitialized(void Function(String) onStatus) async {
-    if (_initialized) {
-      onStatus("🔁 Already initialized");
-      return;
-    }
-
+    if (_initialized) return;
     _initialized = true;
-    await initialize(onStatus);
-  }
 
-  /// ---------------------------------------------------------------
-  /// 2️⃣ Firebase, Hive, SyncManager
-  /// ---------------------------------------------------------------
-  static Future<void> initialize(void Function(String) onStatus) async {
     try {
-      // Firebase
-      onStatus("⚙️ Connecting to Firebase...");
+      onStatus("📦 Initializing local storage...");
+      await Hive.initFlutter();
+      await HiveBoxes.init();
+
+      if (!Hive.isBoxOpen('leaderboard_cache')) {
+        await Hive.openBox('leaderboard_cache');
+      }
+
+      onStatus("🌐 Connecting leaderboard service...");
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      log("✅ Firebase initialized");
 
-      // Hive
-      onStatus("📦 Setting up local storage...");
-      await HiveBoxes.init();
-      log("✅ Hive initialized");
-
-      // Leaderboard cache
-      if (!Hive.isBoxOpen('leaderboard_cache')) {
-        await Hive.openBox('leaderboard_cache');
-        log("📄 Leaderboard cache box opened");
-      }
-
-      // Sync
-      onStatus("🔄 Starting background sync...");
-      SyncManager().start();
-      log("🔁 Sync Manager started");
-
-      onStatus("🚀 Setup complete");
+      onStatus("✅ App ready");
     } catch (e, st) {
-      log("❌ App initialization failed: $e", stackTrace: st);
-      onStatus("❌ Initialization failed");
+      log("Initialization error: $e", stackTrace: st);
+      onStatus("❌ Init failed");
     }
-  }
-
-  /// ---------------------------------------------------------------
-  /// ❌ REMOVE PRELOAD HERE — Providers must NOT be created here
-  /// ---------------------------------------------------------------
-  static Future<void> preloadAppData() async {
-    // ❌ DO NOTHING HERE ANYMORE
-    // Providers are created only once in main.dart then auto-load.
-    log("ℹ️ preloadAppData skipped — using provider constructors instead");
   }
 }

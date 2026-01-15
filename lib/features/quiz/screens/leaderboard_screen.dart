@@ -1,11 +1,13 @@
 // lib/features/quiz/screens/leaderboard_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../theme/app_theme.dart';
-import '../quiz_repository.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../../theme/app_theme.dart';
+import '../../../providers/local_user_provider.dart';
+import '../quiz_repository.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -15,7 +17,6 @@ class LeaderboardScreen extends StatefulWidget {
 }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  final user = FirebaseAuth.instance.currentUser;
   final QuizRepository _quizRepo = QuizRepository();
 
   String selectedTab = "daily";
@@ -26,59 +27,62 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Map<String, dynamic>? myDailyData;
   Map<String, dynamic>? myWeeklyData;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchDailyRank();
-    _fetchWeeklyRank();
-  }
-
-  // -----------------------------------------------------------
-  // DATE KEY (yyyy-MM-dd)
-  // -----------------------------------------------------------
   String get todayKey {
     final now = DateTime.now();
     return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
   }
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchDailyRank();
+      _fetchWeeklyRank();
+    });
+  }
+
   // -----------------------------------------------------------
-  // DAILY RANK
+  // DAILY RANK (DEVICE BASED)
   // -----------------------------------------------------------
   Future<void> _fetchDailyRank() async {
-    if (user == null) return;
+    final deviceId =
+        context.read<LocalUserProvider>().deviceId;
 
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection("daily_leaderboard")
-          .doc(todayKey)
-          .collection("entries")
-          .orderBy("score", descending: true)
-          .orderBy("timeTaken")
-          .get();
+    if (deviceId == null) return;
 
-      int rank = 1;
-      myDailyRank = null;
-      myDailyData = null;
+    final snap = await FirebaseFirestore.instance
+        .collection("daily_leaderboard")
+        .doc(todayKey)
+        .collection("entries")
+        .orderBy("score", descending: true)
+        .orderBy("timeTaken")
+        .get();
 
-      for (final doc in snap.docs) {
-        if (doc.id == user!.uid) {
-          myDailyRank = rank;
-          myDailyData = doc.data();
-          break;
-        }
-        rank++;
+    int rank = 1;
+    myDailyRank = null;
+    myDailyData = null;
+
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      if (data["deviceId"] == deviceId) {
+        myDailyRank = rank;
+        myDailyData = data;
+        break;
       }
-      setState(() {});
-    } catch (e) {
-      debugPrint("⚠️ DailyRank fetch error: $e");
+      rank++;
     }
+
+    if (mounted) setState(() {});
   }
 
   // -----------------------------------------------------------
   // WEEKLY RANK
   // -----------------------------------------------------------
   Future<void> _fetchWeeklyRank() async {
-    if (user == null) return;
+    final deviceId =
+        context.read<LocalUserProvider>().deviceId;
+
+    if (deviceId == null) return;
 
     final list = await _fetchWeeklyLeaderboardList();
 
@@ -87,7 +91,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     myWeeklyData = null;
 
     for (final entry in list) {
-      if (entry["uid"] == user!.uid) {
+      if (entry["deviceId"] == deviceId) {
         myWeeklyRank = rank;
         myWeeklyData = entry;
         break;
@@ -95,19 +99,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       rank++;
     }
 
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   // -----------------------------------------------------------
-  // WEEKLY = best score in last 7 days
+  // WEEKLY = BEST OF LAST 7 DAYS
   // -----------------------------------------------------------
   Future<List<Map<String, dynamic>>> _fetchWeeklyLeaderboardList() async {
     final now = DateTime.now();
-    final last7days = List.generate(7, (i) => now.subtract(Duration(days: i)));
+    final days = List.generate(7, (i) => now.subtract(Duration(days: i)));
 
-    final Map<String, Map<String, dynamic>> bestByUser = {};
+    final Map<String, Map<String, dynamic>> bestByDevice = {};
 
-    for (final d in last7days) {
+    for (final d in days) {
       final key =
           "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
@@ -119,34 +123,30 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
       for (final doc in snap.docs) {
         final data = doc.data();
-        final uid = data["uid"];
-
+        final id = data["deviceId"];
         final score = data["score"] ?? 0;
-        final timeTaken = data["timeTaken"] ?? 9999;
-        final timestamp = (data["timestamp"] as Timestamp?)?.toDate() ?? d;
+        final time = data["timeTaken"] ?? 9999;
 
-        if (!bestByUser.containsKey(uid) ||
-            score > bestByUser[uid]!["score"] ||
-            (score == bestByUser[uid]!["score"] &&
-                timeTaken < bestByUser[uid]!["timeTaken"])) {
-          bestByUser[uid] = {
-            "uid": uid,
-            "name": data["name"] ?? "Player",
-            "photoUrl": data["photoUrl"] ?? "",
+        if (!bestByDevice.containsKey(id) ||
+            score > bestByDevice[id]!["score"] ||
+            (score == bestByDevice[id]!["score"] &&
+                time < bestByDevice[id]!["timeTaken"])) {
+          bestByDevice[id] = {
+            "deviceId": id,
+            "username": data["username"] ?? "Player",
             "score": score,
-            "timeTaken": timeTaken,
-            "date": timestamp,
+            "timeTaken": time,
+            "date": (data["timestamp"] as Timestamp?)?.toDate(),
           };
         }
       }
     }
 
-    final list = bestByUser.values.toList();
+    final list = bestByDevice.values.toList();
 
-    // Sort: score DESC, timeTaken ASC
     list.sort((a, b) {
-      final scoreCmp = b["score"].compareTo(a["score"]);
-      if (scoreCmp != 0) return scoreCmp;
+      final s = b["score"].compareTo(a["score"]);
+      if (s != 0) return s;
       return a["timeTaken"].compareTo(b["timeTaken"]);
     });
 
@@ -162,22 +162,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final textColor = AppTheme.adaptiveText(context);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text("Leaderboard"),
         backgroundColor: accent,
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () async {
-              await _fetchDailyRank();
-              await _fetchWeeklyRank();
-            },
-          ),
-        ],
       ),
-
       body: Column(
         children: [
           const SizedBox(height: 8),
@@ -190,268 +179,76 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  // -----------------------------------------------------------
-  // TABS
-  // -----------------------------------------------------------
   Widget _tabs(Color textColor, Color accent) {
-    const tabs = ["daily", "weekly"];
-    const labels = ["Daily", "Weekly"];
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: textColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        children: List.generate(2, (i) {
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => selectedTab = tabs[i]),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selectedTab == tabs[i] ? accent : Colors.transparent,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Center(
-                  child: Text(
-                    labels[i],
-                    style: TextStyle(
-                      color: selectedTab == tabs[i]
-                          ? Colors.white
-                          : textColor.withOpacity(0.7),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: ["daily", "weekly"].map((t) {
+        final selected = selectedTab == t;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: ChoiceChip(
+            label: Text(t.toUpperCase()),
+            selected: selected,
+            selectedColor: accent,
+            onSelected: (_) => setState(() => selectedTab = t),
+          ),
+        );
+      }).toList(),
     );
   }
 
-  // -----------------------------------------------------------
-  // TAB CONTENT
-  // -----------------------------------------------------------
   Widget _tabContent(Color textColor, Color accent) {
     if (selectedTab == "daily") {
-      return _dailyLeaderboard(textColor, accent);
-    } else {
-      return FutureBuilder(
-        future: _fetchWeeklyLeaderboardList(),
-        builder: (context, snap) {
+      return StreamBuilder(
+        stream: _quizRepo.getDailyLeaderboard(),
+        builder: (_, snap) {
           if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          return _buildLeaderboardList(snap.data!, textColor, accent);
+
+          final list = snap.data!.docs.map((d) => d.data()).toList();
+          return _buildList(list, textColor, accent);
+        },
+      );
+    } else {
+      return FutureBuilder(
+        future: _fetchWeeklyLeaderboardList(),
+        builder: (_, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return _buildList(snap.data!, textColor, accent);
         },
       );
     }
   }
 
-  // -----------------------------------------------------------
-  // DAILY STREAM
-  // -----------------------------------------------------------
-  Widget _dailyLeaderboard(Color textColor, Color accent) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _quizRepo.getDailyLeaderboard(),
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final list = snap.data!.docs.map((e) {
-          final d = e.data();
-          return {
-            "uid": e.id,
-            "name": d["name"] ?? "Player",
-            "photoUrl": d["photoUrl"] ?? "",
-            "score": d["score"] ?? 0,
-            "timeTaken": d["timeTaken"] ?? 9999,
-            "date": (d["timestamp"] as Timestamp?)?.toDate() ?? DateTime.now(),
-          };
-        }).toList();
-
-        return _buildLeaderboardList(list, textColor, accent);
-      },
-    );
-  }
-
-  // -----------------------------------------------------------
-  // LIST UI
-  // -----------------------------------------------------------
-  Widget _buildLeaderboardList(
-    List<Map<String, dynamic>> list,
-    Color textColor,
-    Color accent,
-  ) {
+  Widget _buildList(
+      List<Map<String, dynamic>> list, Color textColor, Color accent) {
     if (list.isEmpty) {
-      return Center(
-        child: Text(
-          "No results yet!",
-          style: TextStyle(color: textColor.withOpacity(0.8)),
-        ),
-      );
+      return const Center(child: Text("No results yet"));
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 80),
       itemCount: list.length,
-      itemBuilder: (context, index) {
-        final entry = list[index];
-        final rank = index + 1;
-        final isYou = user != null && entry["uid"] == user!.uid;
-
-        final date = entry["date"] as DateTime?;
-        final day = date != null ? DateFormat('EEE').format(date) : "";
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: isYou
-                ? accent.withOpacity(0.15)
-                : Colors.grey.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: isYou ? accent : accent.withOpacity(0.2),
-                child: Text(
-                  "$rank",
-                  style: TextStyle(
-                    color: isYou ? Colors.white : textColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              CircleAvatar(
-                radius: 18,
-                backgroundImage: entry["photoUrl"].toString().isNotEmpty
-                    ? NetworkImage(entry["photoUrl"])
-                    : null,
-                backgroundColor: accent.withOpacity(0.25),
-                child: entry["photoUrl"].toString().isEmpty
-                    ? Text(
-                        (entry["name"] ?? "U")[0].toUpperCase(),
-                        style: TextStyle(
-                          color: accent,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  entry["name"] ?? "Player",
-                  style: TextStyle(
-                    color: textColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    "${entry["score"]}",
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (day.isNotEmpty)
-                    Text(
-                      day,
-                      style: TextStyle(
-                        color: textColor.withOpacity(0.6),
-                        fontSize: 12,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
+      itemBuilder: (_, i) {
+        final e = list[i];
+        return ListTile(
+          leading: CircleAvatar(child: Text("${i + 1}")),
+          title: Text(e["username"] ?? "Player"),
+          trailing: Text("${e["score"]}"),
         );
       },
     );
   }
 
-  // -----------------------------------------------------------
-  // YOUR RANK SECTION
-  // -----------------------------------------------------------
   Widget? _yourRankSection() {
-    if (user == null) return null;
+    int? rank = selectedTab == "daily" ? myDailyRank : myWeeklyRank;
+    if (rank == null) return null;
 
-    final accent = AppTheme.adaptiveAccent(context);
-    final textColor = AppTheme.adaptiveText(context);
-
-    int? rank;
-    Map<String, dynamic>? data;
-
-    if (selectedTab == "daily") {
-      rank = myDailyRank;
-      data = myDailyData;
-    } else {
-      rank = myWeeklyRank;
-      data = myWeeklyData;
-    }
-
-    if (rank == null || data == null) return null;
-
-    final score = data["score"] ?? 0;
-
-    final DateTime? date = data["date"];
-    final day = date != null ? DateFormat('EEE').format(date) : "";
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.13),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundImage: user?.photoURL != null
-                ? NetworkImage(user!.photoURL!)
-                : null,
-            backgroundColor: accent,
-            child: user?.photoURL == null
-                ? Text(
-                    (user?.displayName ?? 'U')[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              "You • Rank #$rank\nScore: $score${day.isNotEmpty ? " ($day)" : ""}",
-              style: TextStyle(
-                color: textColor.withOpacity(0.85),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Icon(Icons.emoji_events_rounded, color: accent, size: 26),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text("🔥 Your Rank: #$rank"),
     );
   }
 }
